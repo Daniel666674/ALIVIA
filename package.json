@@ -21,7 +21,7 @@
   "dependencies": {
     "@node-rs/argon2": "^2.2.2",
     "@upstash/ratelimit": "^2.2.0",
-    "@upstash/redis": "^1.39.0",
+    "@upstash/redis": "^1.40.0",
     "drizzle-orm": "^0.45.4",
     "next": "^16.4.3",
     "otpauth": "^9.5.2",
