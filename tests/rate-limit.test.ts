@@ -17,3 +17,30 @@ describe("rate limiting (memory fallback)", () => {
     expect((await rateLimit("loginIp", "a")).ok).toBe(true);
   });
 });
+
+import { afterAll, beforeAll } from "vitest";
+import { dbLimit } from "@/lib/rate-limit";
+import { rateLimitHits } from "@/db/schema";
+import { createTestDb } from "./helpers/db";
+
+describe("rate limiting (Postgres store)", () => {
+  let t: Awaited<ReturnType<typeof createTestDb>>;
+  beforeAll(async () => { t = await createTestDb(); });
+  afterAll(() => t.close());
+
+  it("enforces the window across calls and isolates keys", async () => {
+    for (let i = 0; i < LIMITS.mfa.max; i++) expect((await t.system((tx) => dbLimit(tx, "mfa", "u1"))).ok).toBe(true);
+    const blocked = await t.system((tx) => dbLimit(tx, "mfa", "u1"));
+    expect(blocked.ok).toBe(false);
+    expect(blocked.retryAfterSec).toBeGreaterThan(0);
+    expect((await t.system((tx) => dbLimit(tx, "mfa", "u2"))).ok).toBe(true);
+  });
+  it("lets requests through again once hits age out", async () => {
+    await t.admin.update(rateLimitHits).set({ at: new Date(Date.now() - 11 * 60_000) });
+    expect((await t.system((tx) => dbLimit(tx, "mfa", "u1"))).ok).toBe(true);
+  });
+  it("is not reachable without system scope (RLS)", async () => {
+    const rows = await t.tenant("00000000-0000-0000-0000-000000000000", (tx) => tx.select().from(rateLimitHits));
+    expect(rows).toHaveLength(0);
+  });
+});

@@ -1,6 +1,9 @@
 import "server-only";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
+import { and, eq, gt, lt, sql } from "drizzle-orm";
+import { withSystem, type Tx } from "@/db/client";
+import { rateLimitHits } from "@/db/schema";
 import { env } from "@/env";
 
 export const LIMITS = {
@@ -50,12 +53,47 @@ function upstash(name: LimitName): Ratelimit {
 }
 
 /**
+ * Sliding window stored in Postgres (shared across serverless instances). An advisory lock per
+ * bucket+key serializes concurrent requests so the limit can't be raced past.
+ */
+export async function dbLimit(tx: Tx, name: LimitName, key: string): Promise<LimitResult> {
+  const { max, windowSec } = LIMITS[name];
+  const now = Date.now();
+  const since = new Date(now - windowSec * 1000);
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`${name}:${key}`}))`);
+  await tx.delete(rateLimitHits).where(and(eq(rateLimitHits.bucket, name), eq(rateLimitHits.key, key), lt(rateLimitHits.at, since)));
+  const hits = await tx
+    .select({ at: rateLimitHits.at })
+    .from(rateLimitHits)
+    .where(and(eq(rateLimitHits.bucket, name), eq(rateLimitHits.key, key), gt(rateLimitHits.at, since)))
+    .orderBy(rateLimitHits.at);
+  if (hits.length >= max) {
+    return { ok: false, retryAfterSec: Math.max(1, Math.ceil((hits[0]!.at.getTime() + windowSec * 1000 - now) / 1000)) };
+  }
+  await tx.insert(rateLimitHits).values({ bucket: name, key });
+  return { ok: true, retryAfterSec: 0 };
+}
+
+/** Housekeeping for one-off keys that never come back; call from a periodic job. */
+export function purgeExpiredRateLimitHits(tx: Tx) {
+  const oldest = Math.max(...Object.values(LIMITS).map((l) => l.windowSec));
+  return tx.delete(rateLimitHits).where(lt(rateLimitHits.at, new Date(Date.now() - oldest * 1000)));
+}
+
+/**
  * Check + consume one hit. Fails CLOSED: if the store is unreachable, the request is denied.
- * Without Upstash configured (dev/test only — production env validation requires it) falls back to memory.
+ * Store: Upstash Redis when configured, else Postgres. In-memory only in dev/test.
  */
 export async function rateLimit(name: LimitName, key: string): Promise<LimitResult> {
   const e = env();
-  if (!e.UPSTASH_REDIS_REST_URL) return memoryLimit(name, key);
+  if (!e.UPSTASH_REDIS_REST_URL) {
+    if (e.NODE_ENV !== "production") return memoryLimit(name, key);
+    try {
+      return await withSystem((tx) => dbLimit(tx, name, key));
+    } catch {
+      return { ok: false, retryAfterSec: 30 };
+    }
+  }
   try {
     const r = await upstash(name).limit(key);
     return { ok: r.success, retryAfterSec: r.success ? 0 : Math.max(1, Math.ceil((r.reset - Date.now()) / 1000)) };

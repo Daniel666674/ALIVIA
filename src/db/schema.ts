@@ -145,3 +145,15 @@ export const auditLog = pgTable(
   },
   (t) => [index("audit_firm_at_idx").on(t.firmId, t.at)],
 );
+
+/** Sliding-window hits for the DB-backed rate limiter (used when Redis isn't configured). */
+export const rateLimitHits = pgTable(
+  "rate_limit_hits",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    bucket: text("bucket").notNull(),
+    key: text("key").notNull(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("rate_limit_hits_lookup_idx").on(t.bucket, t.key, t.at)],
+);

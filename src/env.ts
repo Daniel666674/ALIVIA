@@ -18,9 +18,9 @@ const schema = z
     APP_URL: z.string().url().default("http://localhost:3000"),
   })
   .superRefine((e, ctx) => {
-    // Fail closed: production must never run without a shared rate-limit store.
-    if (e.NODE_ENV === "production" && (!e.UPSTASH_REDIS_REST_URL || !e.UPSTASH_REDIS_REST_TOKEN)) {
-      ctx.addIssue({ code: "custom", message: "Upstash Redis is required in production (rate limiting)" });
+    // Redis is optional (rate limits fall back to Postgres), but never half-configured.
+    if (Boolean(e.UPSTASH_REDIS_REST_URL) !== Boolean(e.UPSTASH_REDIS_REST_TOKEN)) {
+      ctx.addIssue({ code: "custom", message: "Set both UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN, or neither" });
     }
     if (e.NODE_ENV === "production" && !e.APP_URL.startsWith("https://")) {
       ctx.addIssue({ code: "custom", message: "APP_URL must be https in production" });

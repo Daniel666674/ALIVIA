@@ -18,7 +18,7 @@ describe("security architecture guards", () => {
   });
 
   it("cross-tenant withSystem() is confined to the auth layer", () => {
-    const allowed = [/^lib\/auth\//, /^app\/login\/actions\.ts$/, /^db\/client\.ts$/];
+    const allowed = [/^lib\/auth\//, /^app\/login\/actions\.ts$/, /^db\/client\.ts$/, /^lib\/rate-limit\.ts$/];
     const bad = files
       .filter((f) => /\bwithSystem\(/.test(f.text) && !allowed.some((re) => re.test(f.rel)))
       .map((f) => f.rel);
