@@ -1,3 +1,4 @@
+import { isDeveloper } from "@/lib/developer";
 import { UsageTracker } from "@/components/usage-tracker";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -95,7 +96,7 @@ export async function Shell({ session, active, children }: { session: ResolvedSe
           </div>
           <div className="mt-1 flex items-center justify-between px-2 text-[12px]" style={{ color: "var(--sb-item)" }}>
             <Link href="/account/security" className="hover:text-white">Seguridad</Link>
-            {can(session, "user:manage") && <Link href="/usage" className="hover:text-white">Uso</Link>}
+            {isDeveloper(session.user.email) && <Link href="/usage" className="hover:text-white">Uso</Link>}
             <form action={logoutAction}>
               <button type="submit" className="inline-flex items-center gap-1 hover:text-white"><Icon name="logout" width={13} height={13} />Salir</button>
             </form>

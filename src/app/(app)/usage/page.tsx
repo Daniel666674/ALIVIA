@@ -4,7 +4,9 @@ import { withTenant } from "@/db/client";
 import { auditLog, usageEvents, users } from "@/db/schema";
 import { Avatar, PageHeader, Stat } from "@/components/app-ui";
 import { Shell } from "@/components/shell";
-import { requirePermission } from "@/lib/auth/session";
+import { notFound } from "next/navigation";
+import { isDeveloper } from "@/lib/developer";
+import { requireUser } from "@/lib/auth/session";
 import { AUTOMATIONS, INTEGRATIONS } from "@/lib/catalog";
 import { KNOWN_PAGES } from "@/lib/usage";
 import { fmtDateTime, timeAgo } from "@/lib/format";
@@ -16,7 +18,8 @@ const num = (n: number) => n.toLocaleString("es-CO");
 const label = sql<string>`coalesce(meta->>'label','?')`;
 
 export default async function UsagePage({ searchParams }: { searchParams: Promise<{ p?: string; d?: string }> }) {
-  const s = await requirePermission("user:manage");
+  const s = await requireUser();
+  if (!isDeveloper(s.user.email)) notFound(); // developer-only tab
   const q = await searchParams;
   const days = [7, 30, 90].includes(Number(q.d)) ? Number(q.d) : 30;
   const f = s.user.firmId;
