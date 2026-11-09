@@ -78,10 +78,11 @@ export const HELP: Record<string, HelpEntry> = {
     use: ["Filtre por persona arriba a la derecha.", "Toque una tarjeta para abrir el cliente."],
   },
   "tasks": {
-    title: "Tareas",
-    see: "Las tareas del equipo, con responsable y fecha.",
-    use: ["Cree una tarea arriba, asigne y ponga fecha.", "“Mis tareas” filtra solo las suyas.", "Las vencidas aparecen en rojo y también en el dashboard."],
+    title: "Tareas (tablero)",
+    see: "Todas las tareas del equipo en columnas: Por hacer, En curso, En revisión y Hecha.",
+    use: ["Arrastre una tarjeta a otra columna, o use el menú “Mover” de la tarjeta.", "Las fechas en rojo están vencidas.", "Filtre por persona con las pestañas de arriba y cree tareas con “＋ Nueva tarea”."],
   },
+
   "documents": {
     title: "Documentos",
     see: "Todos los documentos de todos los clientes en una sola lista, con su estado.",

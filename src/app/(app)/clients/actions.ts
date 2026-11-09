@@ -13,7 +13,7 @@ import { MAX_FILE_BYTES, UploadError, deleteFile, setDocumentStatus, uploadDocum
 import { parseDoc } from "@/lib/clients/nit";
 import { LimitError, createClient, markClient, setStage, softDeleteClient, updateClient } from "@/lib/clients/service";
 import { addNote, deleteNote } from "@/lib/clients/notes";
-import { createTask, deleteTask, setTaskDone } from "@/lib/clients/tasks";
+import { TASK_STATUSES, createTask, deleteTask, setTaskDone, setTaskStatus } from "@/lib/clients/tasks";
 
 const optional = (max: number) => z.string().trim().max(max).transform((v) => (v === "" ? null : v));
 const Id = z.string().uuid();
@@ -189,6 +189,20 @@ export async function toggleTaskAction(form: FormData) {
   });
   revalidatePath("/tasks");
   revalidatePath("/dashboard");
+}
+
+/** Kanban drag & drop / "move to" select. Returns false when it could not be saved. */
+export async function moveTaskAction(taskId: string, status: string): Promise<boolean> {
+  const s = await requirePermission("task:write");
+  const p = z.object({ id: Id, status: z.enum(TASK_STATUSES as [string, ...string[]]) }).safeParse({ id: taskId, status });
+  if (!p.success) return false;
+  const req = await requestInfo();
+  await withTenant(s.user.firmId, async (tx) => {
+    await setTaskStatus(tx, s.user.firmId, p.data.id, p.data.status as (typeof TASK_STATUSES)[number]);
+    await audit(tx, { action: p.data.status === "done" ? "task.done" : "task.moved", firmId: s.user.firmId, userId: s.user.id, resourceType: "task", resourceId: p.data.id, req, meta: { status: p.data.status } });
+  });
+  revalidatePath("/dashboard");
+  return true;
 }
 
 export async function deleteTaskAction(form: FormData) {

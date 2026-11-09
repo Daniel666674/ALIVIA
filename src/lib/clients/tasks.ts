@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, ne, sql, type SQL } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import { clients, tasks, users } from "@/db/schema";
 import { count } from "drizzle-orm";
@@ -24,13 +24,22 @@ export async function setTaskDone(tx: Tx, firmId: string, id: string, done: bool
   await tx.update(tasks).set({ status: done ? "done" : "open", completedAt: done ? new Date() : null }).where(and(eq(tasks.id, id), eq(tasks.firmId, firmId)));
 }
 
+export type TaskStatus = "open" | "doing" | "review" | "done";
+export const TASK_STATUSES: TaskStatus[] = ["open", "doing", "review", "done"];
+
+/** Kanban move. "open" is the "Por hacer" column; anything that is not "done" counts as open work. */
+export async function setTaskStatus(tx: Tx, firmId: string, id: string, status: TaskStatus) {
+  await tx.update(tasks).set({ status, completedAt: status === "done" ? new Date() : null }).where(and(eq(tasks.id, id), eq(tasks.firmId, firmId)));
+}
+
 export async function deleteTask(tx: Tx, firmId: string, id: string) {
   await tx.delete(tasks).where(and(eq(tasks.id, id), eq(tasks.firmId, firmId)));
 }
 
 export async function listTasks(tx: Tx, firmId: string, f: { status?: "open" | "done"; assigneeId?: string }) {
   const conds: SQL[] = [eq(tasks.firmId, firmId)];
-  if (f.status) conds.push(eq(tasks.status, f.status));
+  if (f.status === "done") conds.push(eq(tasks.status, "done"));
+  else if (f.status === "open") conds.push(ne(tasks.status, "done"));
   if (f.assigneeId) conds.push(eq(tasks.assigneeId, f.assigneeId));
   return tx
     .select({ id: tasks.id, title: tasks.title, status: tasks.status, dueDate: tasks.dueDate, clientId: tasks.clientId, clientName: clients.name, assigneeId: tasks.assigneeId, assigneeName: users.name })
@@ -43,14 +52,14 @@ export async function listTasks(tx: Tx, firmId: string, f: { status?: "open" | "
 }
 
 export async function openTaskCount(tx: Tx, firmId: string): Promise<number> {
-  const [r] = await tx.select({ n: count() }).from(tasks).where(and(eq(tasks.firmId, firmId), eq(tasks.status, "open")));
+  const [r] = await tx.select({ n: count() }).from(tasks).where(and(eq(tasks.firmId, firmId), ne(tasks.status, "done")));
   return r?.n ?? 0;
 }
 
 /** Open tasks and assigned (not yet presented) clients per active user. */
 export async function workload(tx: Tx, firmId: string) {
   const team = await tx.select({ id: users.id, name: users.name, role: users.roleId }).from(users).where(and(eq(users.firmId, firmId), eq(users.status, "active")));
-  const t = await tx.select({ id: tasks.assigneeId, n: count() }).from(tasks).where(and(eq(tasks.firmId, firmId), eq(tasks.status, "open"))).groupBy(tasks.assigneeId);
+  const t = await tx.select({ id: tasks.assigneeId, n: count() }).from(tasks).where(and(eq(tasks.firmId, firmId), ne(tasks.status, "done"))).groupBy(tasks.assigneeId);
   const c = await tx
     .select({ id: clients.responsibleId, n: count() })
     .from(clients)

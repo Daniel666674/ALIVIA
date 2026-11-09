@@ -79,7 +79,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const canTask = can(s, "task:write");
   const people2 = people.map((p) => ({ id: p.id, name: p.name }));
   const missing = c.docs.filter((d) => d.status === "pending").map((d) => DOC_LABEL[d.kind]);
-  const openTasks = c.tasks.filter((t) => t.status === "open");
+  const openTasks = c.tasks.filter((t) => t.status !== "done");
   const dleft = daysUntil(c.deadline);
   const stageIdx = c.stage === "pending" ? 0 : c.stage === "in_preparation" ? 1 : c.stage === "in_review" ? 2 : c.paidAt ? 6 : c.deliveredAt ? 5 : c.notifiedAt ? 4 : 3;
   const idLabel = c.docNumber ? `${c.kind === "natural" ? "CC" : "NIT"} ${c.docNumber}${c.docDv ? `-${c.docDv}` : ""}` : `Cédula sin completar${c.docHint ? ` · termina en ${c.docHint}` : ""}`;

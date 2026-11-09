@@ -11,6 +11,7 @@ export type AuditAction =
   | "import.applied" | "import.rolled_back"
   | "document.uploaded" | "document.downloaded" | "document.status" | "document.deleted"
   | "note.created"
+  | "task.moved"
   | "task.created" | "task.done" | "task.deleted";
 
 export async function audit(

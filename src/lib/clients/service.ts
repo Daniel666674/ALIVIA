@@ -348,7 +348,7 @@ export async function shellCounts(tx: Tx, firmId: string) {
       (SELECT count(*)::int FROM clients WHERE firm_id = ${firmId} AND deleted_at IS NULL) AS clients,
       (SELECT count(*)::int FROM client_documents d JOIN clients c ON c.id = d.client_id
         WHERE d.firm_id = ${firmId} AND d.status = 'pending' AND c.deleted_at IS NULL AND c.stage <> 'presented') AS docs,
-      (SELECT count(*)::int FROM tasks WHERE firm_id = ${firmId} AND status = 'open') AS tasks`);
+      (SELECT count(*)::int FROM tasks WHERE firm_id = ${firmId} AND status <> 'done') AS tasks`);
   const row = (r.rows?.[0] ?? {}) as { clients?: number; docs?: number; tasks?: number };
   return { clients: row.clients ?? 0, docs: row.docs ?? 0, tasks: row.tasks ?? 0 };
 }

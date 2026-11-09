@@ -1,68 +1,57 @@
 import Link from "next/link";
 import { withTenant } from "@/db/client";
-import { Badge, PageHeader, Panel } from "@/components/app-ui";
+import { PageHeader, Panel, Stat } from "@/components/app-ui";
 import { Shell } from "@/components/shell";
 import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/session-core";
 import { listClients, firmUsers } from "@/lib/clients/service";
 import { listTasks } from "@/lib/clients/tasks";
-import { fmtDate, todayBogota } from "@/lib/format";
-import { deleteTaskAction, toggleTaskAction } from "../clients/actions";
+import { todayBogota } from "@/lib/format";
 import { TaskForm } from "../clients/forms";
+import { KanbanBoard, type KTask } from "./kanban";
 
 export const dynamic = "force-dynamic";
 
 export default async function TasksPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const s = await requirePermission("task:read");
   const raw = await searchParams;
-  const mine = raw.who === "me";
-  const { open, done, people, clientOptions } = await withTenant(s.user.firmId, async (tx) => ({
-    open: await listTasks(tx, s.user.firmId, { status: "open", assigneeId: mine ? s.user.id : undefined }),
-    done: (await listTasks(tx, s.user.firmId, { status: "done", assigneeId: mine ? s.user.id : undefined })).slice(0, 10),
-    people: await firmUsers(tx, s.user.firmId),
+  const who = raw.who;
+  const people0 = await withTenant(s.user.firmId, (tx) => firmUsers(tx, s.user.firmId));
+  const assigneeId = who === "me" ? s.user.id : people0.find((p) => p.id === who)?.id;
+  const { open, done, clientOptions } = await withTenant(s.user.firmId, async (tx) => ({
+    open: await listTasks(tx, s.user.firmId, { status: "open", assigneeId }),
+    done: (await listTasks(tx, s.user.firmId, { status: "done", assigneeId })).slice(0, 15),
     clientOptions: can(s, "client:read") ? (await listClients(tx, s.user.firmId, { pageSize: 100 })).rows.map((c) => ({ id: c.id, name: c.name })) : [],
   }));
   const today = todayBogota();
   const canWrite = can(s, "task:write");
-  const Row = ({ t }: { t: (typeof open)[number] }) => (
-    <li className="flex items-center gap-3 py-2.5 text-sm">
-      {canWrite && (
-        <form action={toggleTaskAction}>
-          <input type="hidden" name="id" value={t.id} /><input type="hidden" name="done" value={t.status === "done" ? "false" : "true"} />
-          <button aria-label={t.status === "done" ? "Reabrir tarea" : "Completar tarea"} className={`grid h-5 w-5 place-items-center rounded border ${t.status === "done" ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 hover:border-brand"}`}>{t.status === "done" ? "✓" : ""}</button>
-        </form>
-      )}
-      <span className="min-w-0 flex-1">
-        <span className={`block truncate font-medium ${t.status === "done" ? "text-slate-400 line-through" : ""}`}>{t.title}</span>
-        <span className="text-xs text-slate-500">{t.clientId ? <Link href={`/clients/${t.clientId}`} className="hover:underline">{t.clientName}</Link> : "Sin cliente"} · {t.assigneeName ?? "Sin asignar"}</span>
-      </span>
-      {t.dueDate && <Badge tone={t.status === "open" && t.dueDate <= today ? "red" : "slate"}>{fmtDate(t.dueDate)}</Badge>}
-      {canWrite && <form action={deleteTaskAction}><input type="hidden" name="id" value={t.id} /><button className="text-xs text-slate-400 hover:text-red-600" aria-label="Eliminar tarea">✕</button></form>}
-    </li>
-  );
+  const all: KTask[] = [...open, ...done].map((t) => ({ id: t.id, title: t.title, status: t.status, dueDate: t.dueDate, clientId: t.clientId, clientName: t.clientName, assigneeName: t.assigneeName }));
+  const late = open.filter((t) => t.dueDate && t.dueDate < today).length;
+  const tab = (href: string, label: string, on: boolean) => <Link key={href} href={href} className={`f-tab ${on ? "active" : ""}`}>{label}</Link>;
+
   return (
     <Shell session={s} active="/tasks">
-      <PageHeader help="tasks"
-        title="Tareas"
-        subtitle="Asigne, ponga fecha y siga cada tarea"
-        actions={
-          <div className="flex gap-2 text-sm">
-            <Link href="/tasks" className={`rounded-full border px-3 py-1 ${!mine ? "border-brand bg-brand text-white" : "border-slate-300 bg-white"}`}>Todas</Link>
-            <Link href="/tasks?who=me" className={`rounded-full border px-3 py-1 ${mine ? "border-brand bg-brand text-white" : "border-slate-300 bg-white"}`}>Mis tareas</Link>
-          </div>
-        }
-      />
-      {canWrite && (
-        <Panel className="mb-5"><TaskForm people={people.map((p) => ({ id: p.id, name: p.name }))} clients={clientOptions} /></Panel>
-      )}
-      <div className="grid gap-5 xl:grid-cols-[3fr_2fr]">
-        <Panel title={`Abiertas (${open.length})`}>
-          {open.length === 0 ? <p className="text-sm text-slate-500">No hay tareas abiertas.</p> : <ul className="divide-y divide-slate-100">{open.map((t) => <Row key={t.id} t={t} />)}</ul>}
-        </Panel>
-        <Panel title="Completadas recientemente">
-          {done.length === 0 ? <p className="text-sm text-slate-500">Nada todavía.</p> : <ul className="divide-y divide-slate-100">{done.map((t) => <Row key={t.id} t={t} />)}</ul>}
-        </Panel>
+      <PageHeader help="tasks" title="Tareas" subtitle="Arrastre cada tarea entre columnas: Por hacer → En curso → En revisión → Hecha" />
+      <div className="mb-4 grid gap-3.5 sm:grid-cols-3">
+        <Stat icon="tasks" iconBg="#EDE9FE" iconColor="#4F46E5" label="Abiertas" value={open.length} hint={assigneeId ? "· de esta persona" : "· de todo el equipo"} />
+        <Stat icon="clock" iconBg="#FEE2E2" iconColor="#F04438" label="Vencidas" value={late} hint={late ? "↓ Requieren atención" : "· Todo al día"} hintTone={late ? "down" : "neutral"} />
+        <Stat icon="check" iconBg="#CCFBF1" iconColor="#0D9488" label="Hechas recientemente" value={done.length} hint="· últimas 15" />
       </div>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <nav className="f-tabs" aria-label="Filtrar por persona">
+          {tab("/tasks", "Todas", !assigneeId)}
+          {tab("/tasks?who=me", "Mis tareas", who === "me")}
+          {people0.filter((p) => p.id !== s.user.id).map((p) => tab(`/tasks?who=${p.id}`, p.name.split(" ")[0]!, who === p.id))}
+        </nav>
+      </div>
+      {canWrite && (
+        <details className="card mb-4">
+          <summary className="cursor-pointer text-[13px] font-semibold" style={{ color: "var(--brand)" }}>＋ Nueva tarea</summary>
+          <div className="mt-3"><TaskForm people={people0.map((p) => ({ id: p.id, name: p.name }))} clients={clientOptions} /></div>
+        </details>
+      )}
+      <KanbanBoard key={`${assigneeId ?? "all"}-${all.map((t) => t.id + t.status).join("")}`} initial={all} canWrite={canWrite} today={today} />
+      <Panel className="mt-4"><p className="text-[12px]" style={{ color: "var(--t3)" }}>Consejo: también puede cambiar la columna con el menú «Mover» de cada tarjeta (útil en el celular). Las tareas hechas se conservan; aquí se muestran las 15 más recientes.</p></Panel>
     </Shell>
   );
 }

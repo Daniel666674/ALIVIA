@@ -269,7 +269,7 @@ export const tasks = pgTable(
     title: text("title").notNull(),
     assigneeId: uuid("assignee_id").references(() => users.id),
     dueDate: date("due_date", { mode: "string" }),
-    status: text("status", { enum: ["open", "done"] }).notNull().default("open"),
+    status: text("status", { enum: ["open", "doing", "review", "done"] }).notNull().default("open"),
     createdBy: uuid("created_by"),
     createdAt: createdAt(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
