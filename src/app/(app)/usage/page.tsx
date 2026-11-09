@@ -1,4 +1,5 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
+import { env } from "@/env";
 import { withTenant } from "@/db/client";
 import { auditLog, usageEvents, users } from "@/db/schema";
 import { Avatar, PageHeader, Stat } from "@/components/app-ui";
@@ -19,9 +20,12 @@ export default async function UsagePage({ searchParams }: { searchParams: Promis
   const q = await searchParams;
   const days = [7, 30, 90].includes(Number(q.d)) ? Number(q.d) : 30;
   const f = s.user.firmId;
-  const base = and(eq(usageEvents.firmId, f), sql`${usageEvents.at} >= now() - make_interval(days => ${days})`);
 
+  const excludedEmails = env().USAGE_EXCLUDE_EMAILS;
   const d = await withTenant(f, async (tx) => {
+    // Developers (USAGE_EXCLUDE_EMAILS) never count, including events recorded before they were excluded.
+    const excluded = excludedEmails.length ? (await tx.select({ id: users.id }).from(users).where(and(eq(users.firmId, f), sql`lower(${users.email}) in (${sql.join(excludedEmails.map((e) => sql`${e}`), sql`, `)})`))).map((u) => u.id) : [];
+    const base = and(eq(usageEvents.firmId, f), sql`${usageEvents.at} >= now() - make_interval(days => ${days})`, ...(excluded.length ? [notInArray(usageEvents.userId, excluded)] : []));
     const totals = (
       await tx
         .select({

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { withTenant } from "@/db/client";
 import { usageEvents } from "@/db/schema";
+import { env } from "@/env";
 import { getSession, nextStep } from "@/lib/auth/session";
 import { normPath, UsageBatch } from "@/lib/usage";
 
@@ -13,6 +14,7 @@ const res = (status: number) => new NextResponse(null, { status, headers: { "cac
 export async function POST(req: Request) {
   const s = await getSession();
   if (!s || nextStep(s)) return res(401);
+  if (env().USAGE_EXCLUDE_EMAILS.includes(s.user.email.toLowerCase())) return res(204); // developers are not measured
   const origin = req.headers.get("origin");
   if (origin && new URL(origin).host !== req.headers.get("host")) return res(403);
   const now = Date.now();

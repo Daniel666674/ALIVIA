@@ -17,6 +17,8 @@ const schema = z
     UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
     APP_URL: z.string().url().default("http://localhost:3000"),
     /** "false" makes 2FA enrollment optional (users who enrolled still use it). Default: required. */
+    /** Comma-separated emails whose clicks are never measured (the developers). */
+    USAGE_EXCLUDE_EMAILS: z.string().default("").transform((v) => v.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean)),
     REQUIRE_MFA: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
   })
   .superRefine((e, ctx) => {
