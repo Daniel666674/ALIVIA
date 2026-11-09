@@ -96,7 +96,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                     </span>
                   </Link>
                 </td>
-                <td className="whitespace-nowrap text-[12.5px]" style={{ color: "var(--t3)" }}>•••{c.docHint}</td>
+                <td className="whitespace-nowrap text-[12.5px]" style={{ color: "var(--t3)" }}>{c.docHint ? `•••${c.docHint}` : "Sin cédula"}</td>
                 <td>{c.responsibleName ? <span className="flex items-center gap-2"><Avatar name={c.responsibleName} size={24} />{c.responsibleName.split(" ")[0]}</span> : <span style={{ color: "var(--t4)" }}>Sin asignar</span>}</td>
                 <td><span className={`badge ${c.kind === "natural" ? "b-brand" : "b-purple"}`}>{c.kind === "natural" ? "Persona natural" : "Empresa"}</span></td>
                 <td><StageBadge stage={c.stage} /></td>

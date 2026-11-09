@@ -4,7 +4,7 @@ import { inferKind, parseDoc, type ClientKind } from "./nit";
 export const MAX_IMPORT_BYTES = 4 * 1024 * 1024;
 export const MAX_IMPORT_ROWS = 5000;
 
-export const IMPORT_FIELDS = ["name", "lastName", "doc", "kind", "email", "phone", "city", "responsible", "deadline", "fee"] as const;
+export const IMPORT_FIELDS = ["name", "lastName", "doc", "docTail", "kind", "email", "phone", "city", "responsible", "deadline", "fee"] as const;
 export type ImportField = (typeof IMPORT_FIELDS)[number];
 export type Mapping = Partial<Record<ImportField, string>>; // field -> CSV header
 
@@ -12,6 +12,7 @@ export const FIELD_LABELS: Record<ImportField, string> = {
   name: "Nombre o razón social",
   lastName: "Apellidos (opcional, se une al nombre)",
   doc: "Cédula o NIT",
+  docTail: "Últimos dígitos de la cédula (si no hay cédula completa)",
   kind: "Tipo de cliente (opcional)",
   email: "Correo (opcional)",
   phone: "Teléfono o celular (opcional)",
@@ -28,12 +29,13 @@ const SYNONYMS: Record<ImportField, string[]> = {
   name: ["nombre", "nombres", "razon social", "nombre o razon social", "nombre completo", "cliente", "titular", "nombre cliente", "razon social nombre"],
   lastName: ["apellido", "apellidos", "primer apellido"],
   doc: ["nit", "cedula", "cc", "documento", "identificacion", "numero de documento", "nit cc", "nit o cedula", "no documento", "numero documento", "nit cedula", "c c", "id", "n i t"],
+  docTail: ["ultimos dos digitos", "ultimos digitos", "ultimos 2 digitos", "ultimas cifras", "terminacion"],
   kind: ["tipo", "tipo de cliente", "tipo de persona", "clase", "tipo persona", "naturaleza"],
   email: ["correo", "email", "e mail", "correo electronico", "mail", "email contacto"],
   phone: ["telefono", "celular", "movil", "tel", "whatsapp", "telefono celular", "contacto"],
   city: ["ciudad", "municipio"],
   responsible: ["responsable", "asignado", "contador", "encargado", "asignado a"],
-  deadline: ["fecha limite", "vencimiento", "fecha de vencimiento", "fecha vencimiento", "fecha"],
+  deadline: ["fecha limite", "fecha declaracion", "fecha de declaracion", "vencimiento", "fecha de vencimiento", "fecha vencimiento", "fecha"],
   fee: ["honorarios", "valor honorarios", "valor", "tarifa", "fee", "valor declaracion", "valor del servicio"],
 };
 
@@ -55,7 +57,10 @@ export function detectDelimiter(text: string): string {
   return best[1] > 0 ? best[0] : ",";
 }
 
-export type ParsedCsv = { headers: string[]; rows: Record<string, string>[]; delimiter: string; encoding: string };
+export type ParsedCsv = { headers: string[]; rows: Record<string, string>[]; delimiter: string; encoding: string; ignored: string[] };
+
+/** Columns that look like passwords/keys are never stored: Alivia does not keep client credentials. */
+export const SENSITIVE_HEADER = /clave|contrase|password|passwd|\bpin\b|secret|token/i;
 
 export function parseCsv(buf: Buffer): ParsedCsv {
   if (buf.length === 0) throw new Error("El archivo está vacío.");
@@ -81,10 +86,12 @@ export function recordsToParsed(records: string[][], delimiter: string, encoding
     seen.set(h, n);
     return n === 1 ? h : `${h} (${n})`;
   });
+  const keep = headers.map((h) => !SENSITIVE_HEADER.test(norm(h)));
+  const ignored = headers.filter((_, i) => !keep[i]);
   const dataRows = records.slice(1);
   if (dataRows.length > MAX_IMPORT_ROWS) throw new Error(`El archivo supera el máximo de ${MAX_IMPORT_ROWS} filas.`);
-  const rows = dataRows.map((r) => Object.fromEntries(headers.map((h, i) => [h, (r[i] ?? "").toString()])));
-  return { headers, rows, delimiter, encoding };
+  const rows = dataRows.map((r) => Object.fromEntries(headers.flatMap((h, i) => (keep[i] ? [[h, (r[i] ?? "").toString()]] : []))));
+  return { headers: headers.filter((_, i) => keep[i]), rows, delimiter, encoding, ignored };
 }
 
 const isZip = (b: Buffer) => b.length > 4 && b[0] === 0x50 && b[1] === 0x4b && b[2] === 0x03 && b[3] === 0x04;
@@ -125,7 +132,7 @@ export function suggestMapping(headers: string[]): Mapping {
   const used = new Set<string>();
   for (const field of IMPORT_FIELDS) {
     const exact = headers.find((h) => !used.has(h) && SYNONYMS[field].includes(norm(h)));
-    const partial = exact ?? headers.find((h) => !used.has(h) && SYNONYMS[field].some((s) => s.length > 3 && norm(h).includes(s)));
+    const partial = exact ?? (field === "kind" ? undefined : headers.find((h) => !used.has(h) && SYNONYMS[field].some((s) => s.length > 3 && norm(h).includes(s))));
     if (partial) {
       mapping[field] = partial;
       used.add(partial);
@@ -141,7 +148,8 @@ export type RowResult = {
   data?: {
     kind: ClientKind;
     name: string;
-    docNumber: string;
+    docNumber: string | null;
+    docTail: string | null;
     docDv: string | null;
     email: string | null;
     phone: string | null;
@@ -191,16 +199,29 @@ export function validateRows(rows: Record<string, string>[], mapping: Mapping): 
     if (name.length > 200) return { line, status: "error", messages: ["El nombre supera 200 caracteres."] };
     name = titleCase(name);
 
-    const doc = parseDoc(get("doc"));
-    if (!get("doc")) return { line, status: "error", messages: ["Falta la cédula o el NIT."] };
-    if (!doc) return { line, status: "error", messages: ["La cédula o el NIT no es válido (use solo números)."] };
-    if (doc.dvOk === false) {
-      messages.push("El dígito de verificación no coincide; se guardó sin validar.");
-      warn = true;
+    const tailRaw = get("docTail").replace(/\D/g, "");
+    const tail = tailRaw && tailRaw.length <= 4 ? tailRaw.padStart(2, "0") : "";
+    let doc: ReturnType<typeof parseDoc> = null;
+    if (get("doc")) {
+      doc = parseDoc(get("doc"));
+      if (!doc) return { line, status: "error", messages: ["La cédula o el NIT no es válido (use solo números)."] };
+      if (doc.dvOk === false) {
+        messages.push("El dígito de verificación no coincide; se guardó sin validar.");
+        warn = true;
+      }
+      const prior = seenDocs.get(doc.number);
+      if (prior !== undefined) return { line, status: "error", messages: [`Duplicado dentro del archivo (igual a la fila ${prior}).`] };
+      seenDocs.set(doc.number, line);
+    } else if (tail) {
+      // No full id in the file: identify by name + last digits, and let the firm complete it later.
+      const key = `n:${norm(name)}|${tail}`;
+      const prior = seenDocs.get(key);
+      if (prior !== undefined) return { line, status: "error", messages: [`Duplicado dentro del archivo (igual a la fila ${prior}).`] };
+      seenDocs.set(key, line);
+      messages.push("Sin cédula completa: se guardan los últimos dígitos; se completa después en la ficha.");
+    } else {
+      return { line, status: "error", messages: ["Falta la cédula o el NIT."] };
     }
-    const prior = seenDocs.get(doc.number);
-    if (prior !== undefined) return { line, status: "error", messages: [`Duplicado dentro del archivo (igual a la fila ${prior}).`] };
-    seenDocs.set(doc.number, line);
 
     let email: string | null = null;
     const em = get("email").toLowerCase();
@@ -251,8 +272,9 @@ export function validateRows(rows: Record<string, string>[], mapping: Mapping): 
       data: {
         kind: inferKind(get("kind"), doc, name),
         name,
-        docNumber: doc.number,
-        docDv: doc.dv,
+        docNumber: doc ? doc.number : null,
+        docTail: doc ? null : tail,
+        docDv: doc ? doc.dv : null,
         email,
         phone,
         city,

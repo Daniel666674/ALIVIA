@@ -59,18 +59,23 @@ export async function createClientAction(_: FormState, form: FormData): Promise<
   redirect(`/clients/${result.id}`);
 }
 
-const EditForm = ClientForm.omit({ kind: true, doc: true }).extend({ id: Id });
+const EditForm = ClientForm.omit({ kind: true, doc: true }).extend({ id: Id, doc: optional(40) });
 
 export async function updateClientAction(_: FormState, form: FormData): Promise<FormState> {
   const s = await requirePermission("client:write");
   const parsed = EditForm.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: firstError(parsed.error) };
-  const { id, fee, ...rest } = parsed.data;
+  const { id, fee, doc: docRaw, ...rest } = parsed.data;
+  const doc = docRaw ? parseDoc(docRaw) : null;
+  if (docRaw && !doc) return { error: "La cédula o el NIT no es válido (use solo números)." };
   const req = await requestInfo();
-  await withTenant(s.user.firmId, async (tx) => {
-    await updateClient(tx, s.user.firmId, id, { ...rest, feeCop: fee });
+  const err = await withTenant(s.user.firmId, async (tx) => {
+    const r = await updateClient(tx, s.user.firmId, id, { ...rest, feeCop: fee, doc: doc ? { number: doc.number, dv: doc.dv } : null });
+    if (r) return r;
     await audit(tx, { action: "client.updated", firmId: s.user.firmId, userId: s.user.id, resourceType: "client", resourceId: id, req });
+    return undefined;
   });
+  if (err) return err;
   revalidatePath(`/clients/${id}`);
   return undefined;
 }

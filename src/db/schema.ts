@@ -195,9 +195,9 @@ export const clients = pgTable(
     kind: text("kind", { enum: CLIENT_KINDS }).notNull(),
     name: text("name").notNull(),
     /** AES-GCM encrypted ID number (cédula / NIT without check digit). */
-    docNumberEnc: text("doc_number_enc").notNull(),
+    docNumberEnc: text("doc_number_enc"),
     /** HMAC blind index: equality search + uniqueness without decrypting. */
-    docIdx: text("doc_idx").notNull(),
+    docIdx: text("doc_idx"),
     /** Last 3 digits, shown in lists (the full number is only decrypted on the client's page). */
     docHint: text("doc_hint").notNull(),
     docDv: text("doc_dv"),

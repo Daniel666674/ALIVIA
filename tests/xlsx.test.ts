@@ -23,3 +23,20 @@ describe("Excel import", () => {
     await expect(parseSpreadsheet(Buffer.from([0x50, 0x4b, 0x03, 0x04, 1, 2, 3, 4]))).rejects.toThrow(/No se pudo leer el Excel/);
   });
 });
+
+describe("files without full ids and with credential columns", () => {
+  const csv = "Nombre,Ultimos dos digitos,Clave ingreso,FECHA DECLARACION,TELEFONO,TIPO DE ENTREGA\nANA PEREZ,2,Secreta123*,12/08/2026,3123571163,CHIA\nANA PEREZ,2,x,12/08/2026,,\nLUIS DIAZ,00,Otra*,13/08/2026,,\n";
+  it("drops password columns, never maps delivery type as client type, accepts name + last digits", async () => {
+    const p = await parseSpreadsheet(Buffer.from(csv));
+    expect(p.ignored).toEqual(["Clave ingreso"]);
+    expect(JSON.stringify(p.rows)).not.toContain("Secreta");
+    const m = suggestMapping(p.headers);
+    expect(m).toMatchObject({ name: "Nombre", docTail: "Ultimos dos digitos", deadline: "FECHA DECLARACION", phone: "TELEFONO" });
+    expect(m.kind).toBeUndefined();
+    const { validateRows } = await import("../src/lib/clients/csv");
+    const r = validateRows(p.rows, m);
+    expect(r[0]!.data).toMatchObject({ docNumber: null, docTail: "02", deadline: "2026-08-12" });
+    expect(r[1]!.status).toBe("error"); // same name + digits in the file
+    expect(r[2]!.data?.docTail).toBe("00");
+  });
+});

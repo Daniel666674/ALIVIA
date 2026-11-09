@@ -40,12 +40,12 @@ export function parseDoc(raw: string): ParsedDoc | null {
 const COMPANY_WORDS = /\b(s\.?\s?a\.?\s?s\.?|s\.?a\.?|ltda\.?|e\.?u\.?|s\.?\s?en\s?c|cia|y\s+cia|fundaci[oó]n|corporaci[oó]n|cooperativa|asociaci[oó]n|inversiones|comercializadora|constructora|distribuidora|cl[ií]nica|hotel|industrias)\b/i;
 
 /** "Persona natural" vs "Empresa" from an explicit label, else from the document and name. */
-export function inferKind(label: string | undefined, doc: ParsedDoc, name: string): ClientKind {
+export function inferKind(label: string | undefined, doc: ParsedDoc | null, name: string): ClientKind {
   const l = (label ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   if (/jurid|empresa|sociedad|compan|\bpj\b|nit/.test(l) && !/natural/.test(l)) return "empresa";
   if (/natural|\bpn\b|persona|cedula|\bcc\b/.test(l)) return "natural";
-  if (doc.dv !== null && doc.number.length >= 9) return "empresa";
-  if (/^[89]\d{8}$/.test(doc.number)) return "empresa";
+  if (doc && doc.dv !== null && doc.number.length >= 9) return "empresa";
+  if (doc && /^[89]\d{8}$/.test(doc.number)) return "empresa";
   if (COMPANY_WORDS.test(name)) return "empresa";
   return "natural";
 }

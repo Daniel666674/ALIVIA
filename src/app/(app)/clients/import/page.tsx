@@ -158,8 +158,13 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
         <Stat label="Con errores (se omiten)" value={p.errors} tone={p.errors ? "red" : undefined} />
       </div>
       {!p.hasName || !p.hasDoc ? (
-        <p role="alert" className="mb-5 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Indique arriba la columna del <b>nombre</b> y la de la <b>cédula o NIT</b> para continuar.</p>
+        <p role="alert" className="mb-5 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Indique arriba la columna del <b>nombre</b> y la de la <b>cédula o NIT</b> (o de los últimos dígitos) para continuar.</p>
       ) : null}
+      {p.ignored.length > 0 && (
+        <p role="status" className="mb-5 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800">
+          🔒 Por seguridad ignoramos las columnas <b>{p.ignored.join(", ")}</b>: Alivia no guarda claves de clientes. No se leyeron ni se guardaron.
+        </p>
+      )}
       {p.overLimit && <p role="alert" className="mb-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">Con estas filas se superaría el límite de clientes del plan. Quite filas del archivo o amplíe el plan.</p>}
       <Panel title={`2. Vista previa (${shown.length ? "filas que requieren atención y algunas listas" : "primeras filas"})`} className="mb-5">
         <div className="overflow-x-auto">
@@ -170,7 +175,7 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
                 <tr key={r.line} className="border-b border-slate-100 align-top last:border-0">
                   <td className="py-2 pr-3 tabular-nums text-slate-500">{r.line}</td>
                   <td className="pr-3 font-medium">{r.data?.name ?? "—"}</td>
-                  <td className="pr-3 tabular-nums">{r.data ? `•••${r.data.docNumber.slice(-3)}` : "—"}</td>
+                  <td className="pr-3 tabular-nums">{r.data ? (r.data.docNumber ? `•••${r.data.docNumber.slice(-3)}` : `Termina en ${r.data.docTail}`) : "—"}</td>
                   <td className="pr-3">{r.data ? (r.data.kind === "natural" ? "Persona" : "Empresa") : "—"}</td>
                   <td className="pr-3">{r.data?.city ?? "—"}</td>
                   <td>

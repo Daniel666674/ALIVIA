@@ -51,7 +51,7 @@ export function NewClientForm({ people }: { people: Person[] }) {
   );
 }
 
-export function EditClientForm({ c, people }: { c: { id: string; name: string; email: string | null; phone: string | null; city: string | null; deadline: string | null; responsibleId: string | null; feeCop: number | null }; people: Person[] }) {
+export function EditClientForm({ c, people }: { c: { id: string; needsDoc?: boolean; name: string; email: string | null; phone: string | null; city: string | null; deadline: string | null; responsibleId: string | null; feeCop: number | null }; people: Person[] }) {
   const [state, action, pending] = useActionState(updateClientAction, undefined);
   return (
     <form action={action} className="grid gap-3 sm:grid-cols-2">
@@ -59,6 +59,11 @@ export function EditClientForm({ c, people }: { c: { id: string; name: string; e
       <label className={`${label} sm:col-span-2`}>Nombre
         <input name="name" defaultValue={c.name} required maxLength={200} className={`${inputCls} mt-1`} />
       </label>
+      {c.needsDoc && (
+        <label className={`${label} sm:col-span-2`}>Cédula o NIT (falta completarla)
+          <input name="doc" inputMode="numeric" maxLength={20} placeholder="Solo números" className={`${inputCls} mt-1`} />
+        </label>
+      )}
       <label className={label}>Correo
         <input name="email" type="email" defaultValue={c.email ?? ""} maxLength={254} className={`${inputCls} mt-1`} />
       </label>

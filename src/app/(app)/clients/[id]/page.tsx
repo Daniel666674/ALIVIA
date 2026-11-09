@@ -60,7 +60,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
       <PageHeader
         help="client.stage"
         title={c.name}
-        subtitle={`${c.kind === "natural" ? "Persona natural" : "Empresa"} · ${c.kind === "natural" ? "CC" : "NIT"} ${c.docNumber}${c.docDv ? `-${c.docDv}` : ""}${c.city ? ` · ${c.city}` : ""}`}
+        subtitle={`${c.kind === "natural" ? "Persona natural" : "Empresa"} · ${c.docNumber ? `${c.kind === "natural" ? "CC" : "NIT"} ${c.docNumber}${c.docDv ? `-${c.docDv}` : ""}` : `Cédula sin completar${c.docHint ? ` (termina en ${c.docHint})` : ""}`}${c.city ? ` · ${c.city}` : ""}`}
         actions={canWrite && (
           <>
             {STAGES.filter((x) => x.stage !== c.stage).map((x) => (
@@ -191,7 +191,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
           </Panel>
           <Panel title="Datos del cliente">
             {canWrite ? (
-              <EditClientForm c={{ id: c.id, name: c.name, email: c.email, phone: c.phone, city: c.city, deadline: c.deadline, responsibleId: c.responsibleId, feeCop: c.feeCop }} people={people2} />
+              <EditClientForm c={{ id: c.id, needsDoc: !c.docNumber, name: c.name, email: c.email, phone: c.phone, city: c.city, deadline: c.deadline, responsibleId: c.responsibleId, feeCop: c.feeCop }} people={people2} />
             ) : (
               <dl className="space-y-1 text-sm"><dt className="text-slate-500">Correo</dt><dd>{c.email ?? "—"}</dd><dt className="text-slate-500">Teléfono</dt><dd>{c.phone ?? "—"}</dd></dl>
             )}

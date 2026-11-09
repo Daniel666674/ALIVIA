@@ -13,7 +13,8 @@ const aad = (field: string, id: string) => `clients.${field}:${id}`;
 export type NewClient = {
   kind: ClientKind;
   name: string;
-  docNumber: string;
+  docNumber: string | null;
+  docTail?: string | null;
   docDv?: string | null;
   email?: string | null;
   phone?: string | null;
@@ -54,9 +55,9 @@ export async function insertClients(tx: Tx, firmId: string, list: NewClient[]): 
           firmId,
           kind: c.kind,
           name: c.name,
-          docNumberEnc: encryptField(c.docNumber, aad("doc", id)),
-          docIdx: docIdx(c.docNumber),
-          docHint: lastDigits(c.docNumber),
+          docNumberEnc: c.docNumber ? encryptField(c.docNumber, aad("doc", id)) : null,
+          docIdx: c.docNumber ? docIdx(c.docNumber) : null,
+          docHint: c.docNumber ? lastDigits(c.docNumber) : (c.docTail ?? ""),
           docDv: c.docDv ?? null,
           emailEnc: c.email ? encryptField(c.email, aad("email", id)) : null,
           phoneEnc: c.phone ? encryptField(c.phone, aad("phone", id)) : null,
@@ -76,12 +77,14 @@ export async function insertClients(tx: Tx, firmId: string, list: NewClient[]): 
 }
 
 export async function createClient(tx: Tx, firmId: string, c: NewClient): Promise<{ id: string } | { error: string }> {
-  const exists = await tx
-    .select({ id: clients.id })
-    .from(clients)
-    .where(and(eq(clients.firmId, firmId), eq(clients.docIdx, docIdx(c.docNumber)), isNull(clients.deletedAt)))
-    .limit(1);
-  if (exists[0]) return { error: "Ya existe un cliente con esa cédula o NIT." };
+  if (c.docNumber) {
+    const exists = await tx
+      .select({ id: clients.id })
+      .from(clients)
+      .where(and(eq(clients.firmId, firmId), eq(clients.docIdx, docIdx(c.docNumber)), isNull(clients.deletedAt)))
+      .limit(1);
+    if (exists[0]) return { error: "Ya existe un cliente con esa cédula o NIT." };
+  }
   await assertCapacity(tx, firmId, 1);
   const [id] = await insertClients(tx, firmId, [c]);
   return { id: id! };
@@ -176,7 +179,8 @@ export async function getClient(tx: Tx, firmId: string, id: string) {
     stage: c.c.stage as Stage,
     deadline: c.c.deadline,
     docDv: c.c.docDv,
-    docNumber: decryptField(c.c.docNumberEnc, aad("doc", c.c.id)),
+    docNumber: c.c.docNumberEnc ? decryptField(c.c.docNumberEnc, aad("doc", c.c.id)) : null,
+    docHint: c.c.docHint,
     email: c.c.emailEnc ? decryptField(c.c.emailEnc, aad("email", c.c.id)) : null,
     phone: c.c.phoneEnc ? decryptField(c.c.phoneEnc, aad("phone", c.c.id)) : null,
     responsibleId: c.c.responsibleId,
@@ -195,9 +199,20 @@ export async function getClient(tx: Tx, firmId: string, id: string) {
 
 // ---- writing -------------------------------------------------------------------------------
 
-export type ClientEdit = { name: string; email: string | null; phone: string | null; city: string | null; responsibleId: string | null; deadline: string | null; feeCop: number | null };
+export type ClientEdit = { doc?: { number: string; dv: string | null } | null; name: string; email: string | null; phone: string | null; city: string | null; responsibleId: string | null; deadline: string | null; feeCop: number | null };
 
-export async function updateClient(tx: Tx, firmId: string, id: string, e: ClientEdit) {
+export async function updateClient(tx: Tx, firmId: string, id: string, e: ClientEdit): Promise<{ error: string } | undefined> {
+  if (e.doc) {
+    const [cur] = await tx.select({ idx: clients.docIdx }).from(clients).where(and(eq(clients.id, id), eq(clients.firmId, firmId)));
+    if (cur && cur.idx === null) {
+      const dup = await tx.select({ id: clients.id }).from(clients).where(and(eq(clients.firmId, firmId), eq(clients.docIdx, docIdx(e.doc.number)), isNull(clients.deletedAt))).limit(1);
+      if (dup[0]) return { error: "Ya existe un cliente con esa cédula o NIT." };
+      await tx
+        .update(clients)
+        .set({ docNumberEnc: encryptField(e.doc.number, aad("doc", id)), docIdx: docIdx(e.doc.number), docHint: lastDigits(e.doc.number), docDv: e.doc.dv })
+        .where(and(eq(clients.id, id), eq(clients.firmId, firmId)));
+    }
+  }
   await tx
     .update(clients)
     .set({
@@ -211,6 +226,7 @@ export async function updateClient(tx: Tx, firmId: string, id: string, e: Client
       updatedAt: new Date(),
     })
     .where(and(eq(clients.id, id), eq(clients.firmId, firmId)));
+  return undefined;
 }
 
 export async function setStage(tx: Tx, firmId: string, id: string, stage: Stage) {
