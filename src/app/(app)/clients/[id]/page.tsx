@@ -112,6 +112,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {canWrite && missing.length > 0 && <WhatsAppButton href={wa.request} clientId={c.id} via="request_docs" label="Pedir documentos" />}
+            <Link href={`/portal?c=${c.id}`} className="btn btn-secondary btn-sm" data-track="portal.open">🌐 Ver portal</Link>
             {c.email && <a href={`mailto:${c.email}`} className="btn btn-secondary btn-sm" data-track="client.email">✉ Correo</a>}
             {tel && <a href={`tel:${tel}`} className="btn btn-secondary btn-sm" data-track="client.call">☎ Llamar</a>}
           </div>

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/app-ui";
 import { CatalogSection } from "@/components/catalog-cards";
 import { Shell } from "@/components/shell";
@@ -14,7 +15,7 @@ export default async function IntegrationsPage() {
       <CatalogSection items={INTEGRATIONS} />
 
       <section className="card mt-2">
-        <div className="sec-hd"><div><h2 className="sec-title">Portal del cliente: cobrar el acceso a sus ~500 clientes</h2><p className="sec-sub">Una misma plataforma, tres niveles de servicio. Los precios los define la firma.</p></div></div>
+        <div className="sec-hd"><div><h2 className="sec-title">Portal del cliente: cobrar el acceso a sus ~500 clientes</h2><p className="sec-sub">Una misma plataforma, tres niveles de servicio. Los precios los define la firma.</p></div><Link href="/portal" className="btn btn-primary btn-sm" data-track="portal.open">Ver el portal en vivo →</Link></div>
         <div className="grid gap-3.5 lg:grid-cols-3">
           {PORTAL_TIERS.map((t) => (
             <div key={t.name} className="rounded-xl border p-4" style={{ borderColor: "var(--ws-border)" }}>

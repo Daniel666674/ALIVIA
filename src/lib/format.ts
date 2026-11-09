@@ -9,6 +9,10 @@ export function fmtDate(iso: string | null | undefined): string {
   return new Date(`${iso}T12:00:00Z`).toLocaleDateString("es-CO", { day: "numeric", month: "short", timeZone: "UTC" });
 }
 
+export function addDaysIso(iso: string, days: number): string {
+  return new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
 export function daysUntil(iso: string | null | undefined): number | null {
   if (!iso) return null;
   const a = Date.parse(`${todayBogota()}T00:00:00Z`);
