@@ -2,6 +2,7 @@
  * Runs on every Vercel build (see "vercel-build"): applies DB migrations, then optionally seeds.
  *  - DATABASE_URL_UNPOOLED (preferred, direct) or DATABASE_URL must point at Postgres; if neither is
  *    set the step is skipped so a first deploy before the database exists still builds.
+ *  - SEED_DISABLE ("a@x.co;b@x.co") disables users and frees their seats; existing users in SEED_USERS get their role updated.
  *  - SEED_FIRM + SEED_USERS ("email:name:role;email:name:role") create the demo firm/users that don't
  *    exist yet. Temp passwords are printed once in the build log. Remove SEED_USERS afterwards.
  */
@@ -22,8 +23,9 @@ try {
   console.log("[provision] Migrations applied.");
 
   const users = (process.env.SEED_USERS ?? "").split(";").map((s) => s.trim()).filter(Boolean);
-  if (users.length) {
-    await runSeed(pool, process.env.SEED_FIRM ?? "Firma Demo", users.map((u) => UserSpec.parse(u)));
+  const disable = (process.env.SEED_DISABLE ?? "").split(/[;,]/).map((s) => s.trim()).filter(Boolean);
+  if (users.length || disable.length) {
+    await runSeed(pool, process.env.SEED_FIRM ?? "Firma Demo", users.map((u) => UserSpec.parse(u)), disable);
   }
 } finally {
   await pool.end();

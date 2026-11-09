@@ -21,7 +21,7 @@ const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
 const tempPassword = () => Array.from({ length: 16 }, () => ALPHABET[randomInt(ALPHABET.length)]).join("");
 
 /** Idempotent: permissions catalog, firm, roles, and any users that don't exist yet. No business data. */
-export async function runSeed(pool: Pool, firmName: string, specs: Spec[]) {
+export async function runSeed(pool: Pool, firmName: string, specs: Spec[], disable: string[] = []) {
   const db = drizzle(pool, { schema });
   await db.transaction(async (tx) => {
   // Provisioning is the one legitimate cross-tenant writer; RLS is FORCEd even for the table owner.
@@ -46,15 +46,34 @@ export async function runSeed(pool: Pool, firmName: string, specs: Spec[]) {
   }
 
   console.log(`\nFirm: ${firm!.name} (${firm!.id}) · seat limit: ${firm!.seatLimit}`);
-  let seats = (await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.firmId, firm!.id))).length;
+  // Seats = ACTIVE users. Disable first so freed seats can be reused in the same run.
+  for (const raw of disable) {
+    const email = raw.trim().toLowerCase();
+    if (!email) continue;
+    const [u] = await tx.select({ id: schema.users.id, status: schema.users.status }).from(schema.users).where(and(eq(schema.users.firmId, firm!.id), eq(schema.users.email, email)));
+    if (!u) { console.log(`  none   ${email} (not found, nothing to disable)`); continue; }
+    if (u.status === "active") {
+      await tx.update(schema.users).set({ status: "disabled", updatedAt: new Date() }).where(eq(schema.users.id, u.id));
+      await tx.update(schema.sessions).set({ revokedAt: new Date() }).where(eq(schema.sessions.userId, u.id));
+      console.log(`  disable ${email}`);
+    }
+  }
+  const activeCount = async () =>
+    (await tx.select({ id: schema.users.id }).from(schema.users).where(and(eq(schema.users.firmId, firm!.id), eq(schema.users.status, "active")))).length;
+  let seats = await activeCount();
   for (const u of specs) {
-    const [existing] = await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, u.email));
+    const [existing] = await tx.select({ id: schema.users.id, roleId: schema.users.roleId, status: schema.users.status }).from(schema.users).where(eq(schema.users.email, u.email));
     if (existing) {
-      console.log(`  skip   ${u.email} (already exists)`);
+      if (existing.roleId !== roleIds.get(u.role)) {
+        await tx.update(schema.users).set({ roleId: roleIds.get(u.role)!, updatedAt: new Date() }).where(eq(schema.users.id, existing.id));
+        console.log(`  role   ${u.email} -> ${u.role}`);
+      } else {
+        console.log(`  skip   ${u.email} (already exists)`);
+      }
       continue;
     }
     if (seats >= firm!.seatLimit) {
-      console.log(`  SKIP   ${u.email} (the plan allows ${firm!.seatLimit} users; raise firms.seat_limit to add more)`);
+      console.log(`  SKIP   ${u.email} (the plan allows ${firm!.seatLimit} active users; raise firms.seat_limit or disable someone)`);
       continue;
     }
     seats++;
@@ -64,6 +83,13 @@ export async function runSeed(pool: Pool, firmName: string, specs: Spec[]) {
     });
     console.log(`  create ${u.email}  role=${u.role}  temp-password=${pw}`);
   }
+  // Safety net: never leave a firm without an active owner (the transaction rolls back).
+  const owners = await tx
+    .select({ id: schema.users.id })
+    .from(schema.users)
+    .innerJoin(schema.roles, eq(schema.roles.id, schema.users.roleId))
+    .where(and(eq(schema.users.firmId, firm!.id), eq(schema.users.status, "active"), eq(schema.roles.key, "owner")));
+  if (owners.length === 0) throw new Error("Refusing to finish: the firm would have no active owner.");
   console.log("\nTemporary passwords are shown only now. Users must change them and enroll 2FA at first login.\n");
   });
 }
