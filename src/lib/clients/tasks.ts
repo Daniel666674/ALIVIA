@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import { clients, tasks, users } from "@/db/schema";
+import { count } from "drizzle-orm";
 
 export async function createTask(tx: Tx, p: { firmId: string; userId: string; title: string; clientId?: string | null; assigneeId?: string | null; dueDate?: string | null }) {
   if (p.clientId) {
@@ -39,4 +40,21 @@ export async function listTasks(tx: Tx, firmId: string, f: { status?: "open" | "
     .where(and(...conds))
     .orderBy(asc(tasks.status), sql`${tasks.dueDate} ASC NULLS LAST`, asc(tasks.title))
     .limit(300);
+}
+
+export async function openTaskCount(tx: Tx, firmId: string): Promise<number> {
+  const [r] = await tx.select({ n: count() }).from(tasks).where(and(eq(tasks.firmId, firmId), eq(tasks.status, "open")));
+  return r?.n ?? 0;
+}
+
+/** Open tasks and assigned (not yet presented) clients per active user. */
+export async function workload(tx: Tx, firmId: string) {
+  const team = await tx.select({ id: users.id, name: users.name, role: users.roleId }).from(users).where(and(eq(users.firmId, firmId), eq(users.status, "active")));
+  const t = await tx.select({ id: tasks.assigneeId, n: count() }).from(tasks).where(and(eq(tasks.firmId, firmId), eq(tasks.status, "open"))).groupBy(tasks.assigneeId);
+  const c = await tx
+    .select({ id: clients.responsibleId, n: count() })
+    .from(clients)
+    .where(and(eq(clients.firmId, firmId), sql`${clients.deletedAt} IS NULL`, sql`${clients.stage} <> 'presented'`))
+    .groupBy(clients.responsibleId);
+  return team.map((u) => ({ id: u.id, name: u.name, tasks: t.find((x) => x.id === u.id)?.n ?? 0, clients: c.find((x) => x.id === u.id)?.n ?? 0 }));
 }

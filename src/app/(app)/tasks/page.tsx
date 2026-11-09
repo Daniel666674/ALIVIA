@@ -42,7 +42,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   );
   return (
     <Shell session={s} active="/tasks">
-      <PageHeader
+      <PageHeader help="tasks"
         title="Tareas"
         subtitle="Asigne, ponga fecha y siga cada tarea"
         actions={

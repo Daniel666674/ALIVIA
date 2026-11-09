@@ -31,14 +31,13 @@ export async function scopedTransaction<T>(
   fn: (tx: Tx) => Promise<T>,
 ): Promise<T> {
   return db.transaction(async (tx) => {
-    // Drop to the RLS-subject role for this transaction only (reverts on commit/rollback).
-    await tx.execute(sql`SET LOCAL ROLE alivia_app`);
-    if (scope === "system") {
-      await tx.execute(sql`SELECT set_config('app.system', 'on', true)`);
-    } else {
-      // set_config is parameterized -> no string interpolation of the tenant id.
-      await tx.execute(sql`SELECT set_config('app.firm_id', ${scope.firmId}, true)`);
-    }
+    // One round trip: drop to the RLS-subject role AND set the tenant scope (both transaction-local).
+    // set_config is parameterized -> no string interpolation of the tenant id.
+    await tx.execute(
+      scope === "system"
+        ? sql`SELECT set_config('role', 'alivia_app', true), set_config('app.system', 'on', true)`
+        : sql`SELECT set_config('role', 'alivia_app', true), set_config('app.firm_id', ${scope.firmId}, true)`,
+    );
     return fn(tx);
   });
 }

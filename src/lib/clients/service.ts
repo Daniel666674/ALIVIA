@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { and, asc, count, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import { clientDocuments, clients, DOC_KINDS, firms, tasks, users } from "@/db/schema";
 import { blindIndex, decryptField, encryptField } from "@/lib/crypto";
@@ -20,6 +20,7 @@ export type NewClient = {
   city?: string | null;
   responsibleId?: string | null;
   deadline?: string | null;
+  feeCop?: number | null;
   importBatchId?: string | null;
 };
 
@@ -62,6 +63,7 @@ export async function insertClients(tx: Tx, firmId: string, list: NewClient[]): 
           city: c.city ?? null,
           responsibleId: c.responsibleId ?? null,
           deadline: c.deadline ?? null,
+          feeCop: c.feeCop ?? null,
           importBatchId: c.importBatchId ?? null,
         };
       }),
@@ -179,6 +181,11 @@ export async function getClient(tx: Tx, firmId: string, id: string) {
     phone: c.c.phoneEnc ? decryptField(c.c.phoneEnc, aad("phone", c.c.id)) : null,
     responsibleId: c.c.responsibleId,
     responsibleName: c.responsibleName,
+    feeCop: c.c.feeCop,
+    lastRemindedAt: c.c.lastRemindedAt,
+    notifiedAt: c.c.notifiedAt,
+    deliveredAt: c.c.deliveredAt,
+    paidAt: c.c.paidAt,
     docs,
     docsReceived: received,
     color: colorFor(c.c.stage as Stage, received),
@@ -188,7 +195,7 @@ export async function getClient(tx: Tx, firmId: string, id: string) {
 
 // ---- writing -------------------------------------------------------------------------------
 
-export type ClientEdit = { name: string; email: string | null; phone: string | null; city: string | null; responsibleId: string | null; deadline: string | null };
+export type ClientEdit = { name: string; email: string | null; phone: string | null; city: string | null; responsibleId: string | null; deadline: string | null; feeCop: number | null };
 
 export async function updateClient(tx: Tx, firmId: string, id: string, e: ClientEdit) {
   await tx
@@ -200,6 +207,7 @@ export async function updateClient(tx: Tx, firmId: string, id: string, e: Client
       city: e.city,
       responsibleId: e.responsibleId,
       deadline: e.deadline,
+      feeCop: e.feeCop,
       updatedAt: new Date(),
     })
     .where(and(eq(clients.id, id), eq(clients.firmId, firmId)));
@@ -259,3 +267,119 @@ export async function firmUsers(tx: Tx, firmId: string) {
   return tx.select({ id: users.id, name: users.name, email: users.email }).from(users).where(and(eq(users.firmId, firmId), eq(users.status, "active"))).orderBy(asc(users.name));
 }
 
+
+/** Clients still missing documents, most urgent first (nearest deadline, then closest to complete). */
+export async function missingDocs(tx: Tx, firmId: string, limit = 5) {
+  const rows = await tx
+    .select({ id: clients.id, name: clients.name, deadline: clients.deadline, received: docsReceivedSql })
+    .from(clients)
+    .where(and(eq(clients.firmId, firmId), isNull(clients.deletedAt), eq(clients.stage, "pending"), sql`${docsReceivedSql} < 4`))
+    .orderBy(sql`${clients.deadline} ASC NULLS LAST`, sql`${docsReceivedSql} DESC`, asc(clients.name))
+    .limit(limit);
+  return rows.map((r) => ({ ...r, pct: Math.round((r.received / 4) * 100), missing: 4 - r.received }));
+}
+
+export async function pendingDocsCount(tx: Tx, firmId: string): Promise<number> {
+  const [r] = await tx
+    .select({ n: count() })
+    .from(clientDocuments)
+    .innerJoin(clients, eq(clients.id, clientDocuments.clientId))
+    .where(and(eq(clientDocuments.firmId, firmId), eq(clientDocuments.status, "pending"), isNull(clients.deletedAt), sql`${clients.stage} <> 'presented'`));
+  return r?.n ?? 0;
+}
+
+export async function newClientsSince(tx: Tx, firmId: string, days = 30): Promise<number> {
+  const [r] = await tx
+    .select({ n: count() })
+    .from(clients)
+    .where(and(eq(clients.firmId, firmId), isNull(clients.deletedAt), sql`${clients.createdAt} > now() - make_interval(days => ${days})`));
+  return r?.n ?? 0;
+}
+
+/** Every document slot across clients, for the global Documentos view. */
+export async function documentRows(tx: Tx, firmId: string, f: { status?: "pending" | "received" | "reviewed"; q?: string; page?: number; pageSize?: number }) {
+  const conds: SQL[] = [eq(clientDocuments.firmId, firmId), isNull(clients.deletedAt)];
+  if (f.status) conds.push(eq(clientDocuments.status, f.status));
+  const q = f.q?.trim();
+  if (q) conds.push(ilike(clients.name, `%${q.replace(/[%_\\]/g, (m) => `\\${m}`)}%`));
+  const where = and(...conds);
+  const pageSize = f.pageSize ?? 50;
+  const page = Math.max(1, f.page ?? 1);
+  const [{ n } = { n: 0 }] = await tx.select({ n: count() }).from(clientDocuments).innerJoin(clients, eq(clients.id, clientDocuments.clientId)).where(where);
+  const rows = await tx
+    .select({
+      id: clientDocuments.id,
+      kind: clientDocuments.kind,
+      status: clientDocuments.status,
+      receivedAt: clientDocuments.receivedAt,
+      clientId: clients.id,
+      clientName: clients.name,
+      files: sql<number>`(SELECT count(*)::int FROM document_files f WHERE f.client_document_id = ${clientDocuments.id})`,
+    })
+    .from(clientDocuments)
+    .innerJoin(clients, eq(clients.id, clientDocuments.clientId))
+    .where(where)
+    .orderBy(sql`${clientDocuments.receivedAt} DESC NULLS LAST`, asc(clients.name))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+  return { rows, total: n };
+}
+
+/** Sidebar badges in ONE round trip. */
+export async function shellCounts(tx: Tx, firmId: string) {
+  const r = await tx.execute(sql`
+    SELECT
+      (SELECT count(*)::int FROM clients WHERE firm_id = ${firmId} AND deleted_at IS NULL) AS clients,
+      (SELECT count(*)::int FROM client_documents d JOIN clients c ON c.id = d.client_id
+        WHERE d.firm_id = ${firmId} AND d.status = 'pending' AND c.deleted_at IS NULL AND c.stage <> 'presented') AS docs,
+      (SELECT count(*)::int FROM tasks WHERE firm_id = ${firmId} AND status = 'open') AS tasks`);
+  const row = (r.rows?.[0] ?? {}) as { clients?: number; docs?: number; tasks?: number };
+  return { clients: row.clients ?? 0, docs: row.docs ?? 0, tasks: row.tasks ?? 0 };
+}
+
+// ---- next best action inputs ------------------------------------------------------------------
+
+import type { NbaClient } from "@/lib/nba";
+
+export async function nbaClients(tx: Tx, firmId: string, onlyId?: string): Promise<NbaClient[]> {
+  const rows = await tx
+    .select({
+      id: clients.id, name: clients.name, kind: clients.kind, stage: clients.stage, deadline: clients.deadline, responsibleId: clients.responsibleId,
+      lastRemindedAt: clients.lastRemindedAt, notifiedAt: clients.notifiedAt, deliveredAt: clients.deliveredAt, paidAt: clients.paidAt, feeCop: clients.feeCop,
+      received: docsReceivedSql,
+      toReview: sql<number>`(SELECT count(*)::int FROM client_documents d WHERE d.client_id = ${clients.id} AND d.status = 'received')`,
+      pending: sql<string | null>`(SELECT string_agg(d.kind, ',') FROM client_documents d WHERE d.client_id = ${clients.id} AND d.status = 'pending')`,
+    })
+    .from(clients)
+    .where(and(eq(clients.firmId, firmId), isNull(clients.deletedAt), ...(onlyId ? [eq(clients.id, onlyId)] : [])))
+    .limit(2500);
+  return rows.map((r) => ({
+    id: r.id, name: r.name, kind: r.kind, stage: r.stage as Stage, deadline: r.deadline, responsibleId: r.responsibleId,
+    docsReceived: r.received, toReview: r.toReview, pendingKinds: r.pending ? r.pending.split(",") : [],
+    lastRemindedAt: r.lastRemindedAt, notifiedAt: r.notifiedAt, deliveredAt: r.deliveredAt, paidAt: r.paidAt, feeCop: r.feeCop,
+  }));
+}
+
+/** Decrypts phones only for the few clients an action list actually shows. */
+export async function clientPhones(tx: Tx, firmId: string, ids: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (ids.length === 0) return out;
+  const rows = await tx.select({ id: clients.id, enc: clients.phoneEnc }).from(clients).where(and(eq(clients.firmId, firmId), inArray(clients.id, ids)));
+  for (const r of rows) if (r.enc) out.set(r.id, decryptField(r.enc, aad("phone", r.id)));
+  return out;
+}
+
+export type Mark = "reminded" | "notified" | "delivered" | "paid";
+const MARK_COL = { reminded: "lastRemindedAt", notified: "notifiedAt", delivered: "deliveredAt", paid: "paidAt" } as const;
+
+export async function markClient(tx: Tx, firmId: string, id: string, mark: Mark, on: boolean) {
+  await tx
+    .update(clients)
+    .set({ [MARK_COL[mark]]: on ? new Date() : null, updatedAt: new Date() })
+    .where(and(eq(clients.id, id), eq(clients.firmId, firmId)));
+}
+
+export async function firmName(tx: Tx, firmId: string): Promise<string> {
+  const [f] = await tx.select({ name: firms.name }).from(firms).where(eq(firms.id, firmId));
+  return f?.name ?? "su firma contable";
+}

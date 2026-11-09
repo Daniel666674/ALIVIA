@@ -50,7 +50,7 @@ export default async function TeamPage() {
   const active = team.filter((t) => t.status === "active").length;
   return (
     <Shell session={s} active="/team">
-      <PageHeader title="Equipo y auditoría" subtitle={`${active} de ${firm.seatLimit} usuarios en uso · plan de hasta ${firm.clientLimit} clientes`} />
+      <PageHeader help="team" title="Equipo y auditoría" subtitle={`${active} de ${firm.seatLimit} usuarios en uso · plan de hasta ${firm.clientLimit} clientes`} />
       <Panel title="Usuarios" className="mb-5">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] text-sm">

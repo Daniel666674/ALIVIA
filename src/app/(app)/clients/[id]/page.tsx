@@ -6,13 +6,16 @@ import { auditLog } from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { Badge, Dot, PageHeader, Panel, StageBadge, btnGhost, btnSmall } from "@/components/app-ui";
 import { Shell } from "@/components/shell";
+import { NbaList } from "@/components/nba-list";
+import { WhatsAppButton } from "@/components/whatsapp-button";
+import { loadNba, waLinksFor } from "@/lib/clients/nba-view";
 import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/session-core";
 import { filesForClient } from "@/lib/clients/documents";
 import { firmUsers, getClient } from "@/lib/clients/service";
 import { COLOR_LABEL, DOC_LABEL, type Stage } from "@/lib/clients/semaforo";
 import { deadlineText, fmtDate, fmtDateTime } from "@/lib/format";
-import { deleteClientAction, deleteFileAction, deleteTaskAction, setDocStatusAction, setStageAction, toggleTaskAction } from "../actions";
+import { markClientAction, deleteClientAction, deleteFileAction, deleteTaskAction, setDocStatusAction, setStageAction, toggleTaskAction } from "../actions";
 import { EditClientForm, TaskForm, UploadForm } from "../forms";
 
 export const dynamic = "force-dynamic";
@@ -39,10 +42,12 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
       .where(and(eq(auditLog.firmId, s.user.firmId), eq(auditLog.resourceId, c.id)))
       .orderBy(desc(auditLog.at))
       .limit(8);
-    return { c, files, people, history };
+    const nba = await loadNba(tx, s.user.firmId, { onlyClientId: c.id, limit: 2 });
+    const wa = await waLinksFor(tx, s.user.firmId, c.id);
+    return { c, files, people, history, nba: nba.items, wa };
   });
   if (!data) notFound();
-  const { c, files, people, history } = data;
+  const { c, files, people, history, nba, wa } = data;
   const canWrite = can(s, "client:write");
   const canDocWrite = can(s, "document:write");
   const canTask = can(s, "task:write");
@@ -53,6 +58,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
     <Shell session={s} active="/clients">
       <Link href="/clients" className="text-sm font-semibold text-brand hover:underline">← Clientes</Link>
       <PageHeader
+        help="client.stage"
         title={c.name}
         subtitle={`${c.kind === "natural" ? "Persona natural" : "Empresa"} · ${c.kind === "natural" ? "CC" : "NIT"} ${c.docNumber}${c.docDv ? `-${c.docDv}` : ""}${c.city ? ` · ${c.city}` : ""}`}
         actions={canWrite && (
@@ -88,9 +94,15 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
         </div>
       </Panel>
 
+      {nba.length > 0 && (
+        <Panel title="Qué hacer ahora con este cliente" help="nba" className="mb-5">
+          <NbaList items={nba} canWrite={canWrite} compact />
+        </Panel>
+      )}
+
       <div className="grid gap-5 xl:grid-cols-[3fr_2fr]">
         <div className="space-y-5">
-          <Panel title="Documentos base" action={<span className="text-xs text-slate-500">Solo 4 por cliente</span>}>
+          <Panel title="Documentos base" help="client.docs" action={<span className="text-xs text-slate-500">Solo 4 por cliente</span>}>
             <ul className="divide-y divide-slate-100">
               {c.docs.map((d) => {
                 const fs = files.filter((f) => f.clientDocumentId === d.id);
@@ -134,7 +146,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
             </ul>
           </Panel>
 
-          <Panel title="Tareas de este cliente">
+          <Panel title="Tareas de este cliente" help="client.tasks">
             {c.tasks.length === 0 && <p className="mb-3 text-sm text-slate-500">Sin tareas.</p>}
             <ul className="mb-3 divide-y divide-slate-100">
               {c.tasks.map((t) => (
@@ -156,9 +168,30 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
         </div>
 
         <div className="space-y-5">
+          <Panel title="Seguimiento" help="client.followup" subtitle={c.stage === "presented" ? "Después de presentar: avisar, entregar y cobrar" : "Disponible cuando la declaración esté presentada"}>
+            <ul className="divide-y divide-slate-100 text-sm">
+              {([
+                ["notified", "Cliente avisado", c.notifiedAt, "notify"],
+                ["delivered", "Carpeta física entregada", c.deliveredAt, null],
+                ["paid", `Honorarios pagados${c.feeCop ? ` ($${c.feeCop.toLocaleString("es-CO")})` : ""}`, c.paidAt, "collect"],
+              ] as const).map(([mark, label, at, via]) => (
+                <li key={mark} className="flex flex-wrap items-center gap-2 py-2.5">
+                  <span className={`grid h-5 w-5 place-items-center rounded-full text-[11px] text-white ${at ? "bg-emerald-500" : "bg-slate-300"}`}>{at ? "✓" : ""}</span>
+                  <span className="flex-1 font-medium">{label}{at ? <span className="ml-2 text-xs font-normal text-slate-500">{fmtDate(at.toISOString().slice(0, 10))}</span> : null}</span>
+                  {canWrite && via && !at && c.stage === "presented" && <WhatsAppButton href={wa[via]} clientId={c.id} via={via} />}
+                  {canWrite && (
+                    <form action={markClientAction}>
+                      <input type="hidden" name="id" value={c.id} /><input type="hidden" name="mark" value={mark} /><input type="hidden" name="on" value={at ? "false" : "true"} />
+                      <button className={btnSmall} disabled={!at && c.stage !== "presented"}>{at ? "Deshacer" : "Marcar"}</button>
+                    </form>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Panel>
           <Panel title="Datos del cliente">
             {canWrite ? (
-              <EditClientForm c={{ id: c.id, name: c.name, email: c.email, phone: c.phone, city: c.city, deadline: c.deadline, responsibleId: c.responsibleId }} people={people2} />
+              <EditClientForm c={{ id: c.id, name: c.name, email: c.email, phone: c.phone, city: c.city, deadline: c.deadline, responsibleId: c.responsibleId, feeCop: c.feeCop }} people={people2} />
             ) : (
               <dl className="space-y-1 text-sm"><dt className="text-slate-500">Correo</dt><dd>{c.email ?? "—"}</dd><dt className="text-slate-500">Teléfono</dt><dd>{c.phone ?? "—"}</dd></dl>
             )}

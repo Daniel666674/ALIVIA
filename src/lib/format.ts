@@ -28,3 +28,23 @@ export function deadlineText(iso: string | null | undefined): string {
 export function fmtDateTime(d: Date): string {
   return d.toLocaleString("es-CO", { timeZone: TZ, day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 }
+
+export function timeAgo(d: Date, now = new Date()): string {
+  const s = Math.max(0, Math.round((now.getTime() - d.getTime()) / 1000));
+  if (s < 60) return "hace un momento";
+  const m = Math.round(s / 60);
+  if (m < 60) return `hace ${m} min`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `hace ${h} ${h === 1 ? "hora" : "horas"}`;
+  const days = Math.round(h / 24);
+  return days === 1 ? "ayer" : `hace ${days} días`;
+}
+
+export function greeting(): string {
+  const h = Number(new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "numeric", hour12: false }).format(new Date()));
+  return h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches";
+}
+
+export function longDate(): string {
+  return new Date().toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: TZ });
+}

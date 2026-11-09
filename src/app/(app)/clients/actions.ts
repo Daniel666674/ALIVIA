@@ -11,7 +11,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { limitOrMessage, type FormState } from "@/lib/auth/actions-shared";
 import { MAX_FILE_BYTES, UploadError, deleteFile, setDocumentStatus, uploadDocument } from "@/lib/clients/documents";
 import { parseDoc } from "@/lib/clients/nit";
-import { LimitError, createClient, setStage, softDeleteClient, updateClient } from "@/lib/clients/service";
+import { LimitError, createClient, markClient, setStage, softDeleteClient, updateClient } from "@/lib/clients/service";
 import { createTask, deleteTask, setTaskDone } from "@/lib/clients/tasks";
 
 const optional = (max: number) => z.string().trim().max(max).transform((v) => (v === "" ? null : v));
@@ -27,6 +27,7 @@ const ClientForm = z.object({
   city: optional(80),
   responsibleId: optional(40).refine((v) => v === null || Id.safeParse(v).success, "Responsable no válido."),
   deadline: optional(10).refine((v) => v === null || IsoDate.safeParse(v).success, "Fecha no válida."),
+  fee: optional(20).transform((v) => (v === null ? null : Number(v.replace(/[^\d]/g, "")) || null)),
 });
 
 function firstError(e: z.ZodError) {
@@ -46,7 +47,7 @@ export async function createClientAction(_: FormState, form: FormData): Promise<
   let result: { id: string } | { error: string };
   try {
     result = await withTenant(s.user.firmId, async (tx) => {
-      const r = await createClient(tx, s.user.firmId, { kind: d.kind, name: d.name, docNumber: doc.number, docDv: doc.dv, email: d.email, phone: d.phone, city: d.city, responsibleId: d.responsibleId, deadline: d.deadline });
+      const r = await createClient(tx, s.user.firmId, { kind: d.kind, name: d.name, docNumber: doc.number, docDv: doc.dv, email: d.email, phone: d.phone, city: d.city, responsibleId: d.responsibleId, deadline: d.deadline, feeCop: d.fee });
       if ("id" in r) await audit(tx, { action: "client.created", firmId: s.user.firmId, userId: s.user.id, resourceType: "client", resourceId: r.id, req });
       return r;
     });
@@ -64,10 +65,10 @@ export async function updateClientAction(_: FormState, form: FormData): Promise<
   const s = await requirePermission("client:write");
   const parsed = EditForm.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: firstError(parsed.error) };
-  const { id, ...e } = parsed.data;
+  const { id, fee, ...rest } = parsed.data;
   const req = await requestInfo();
   await withTenant(s.user.firmId, async (tx) => {
-    await updateClient(tx, s.user.firmId, id, e);
+    await updateClient(tx, s.user.firmId, id, { ...rest, feeCop: fee });
     await audit(tx, { action: "client.updated", firmId: s.user.firmId, userId: s.user.id, resourceType: "client", resourceId: id, req });
   });
   revalidatePath(`/clients/${id}`);
@@ -193,4 +194,35 @@ export async function deleteTaskAction(form: FormData) {
     await audit(tx, { action: "task.deleted", firmId: s.user.firmId, userId: s.user.id, resourceType: "task", resourceId: id, req });
   });
   revalidatePath("/tasks");
+}
+
+const MarkForm = z.object({ id: Id, mark: z.enum(["reminded", "notified", "delivered", "paid"]), on: z.enum(["true", "false"]) });
+
+/** Manual follow-up marks (folder delivered, fee paid, client notified…). Nothing is sent automatically. */
+export async function markClientAction(form: FormData) {
+  const s = await requirePermission("client:write");
+  const p = MarkForm.parse(Object.fromEntries(form));
+  const req = await requestInfo();
+  await withTenant(s.user.firmId, async (tx) => {
+    await markClient(tx, s.user.firmId, p.id, p.mark, p.on === "true");
+    await audit(tx, { action: "client.updated", firmId: s.user.firmId, userId: s.user.id, resourceType: "client", resourceId: p.id, req, meta: { mark: p.mark, on: p.on === "true" } });
+  });
+  revalidatePath(`/clients/${p.id}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/actions");
+}
+
+/** Called when someone opens WhatsApp from an action: remembers that the client was contacted. */
+export async function recordContactAction(clientId: string, via: "request_docs" | "notify" | "collect") {
+  const s = await requirePermission("client:write");
+  const id = Id.parse(clientId);
+  const mark = via === "notify" ? "notified" : "reminded";
+  const req = await requestInfo();
+  await withTenant(s.user.firmId, async (tx) => {
+    await markClient(tx, s.user.firmId, id, mark, true);
+    await audit(tx, { action: "client.updated", firmId: s.user.firmId, userId: s.user.id, resourceType: "client", resourceId: id, req, meta: { mark, via: "whatsapp" } });
+  });
+  revalidatePath("/dashboard");
+  revalidatePath("/actions");
+  revalidatePath(`/clients/${id}`);
 }

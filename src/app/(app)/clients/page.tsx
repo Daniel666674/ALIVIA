@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { z } from "zod";
 import { withTenant } from "@/db/client";
-import { Dot, LinkButton, PageHeader, StageBadge } from "@/components/app-ui";
+import { Avatar, Dot, LinkButton, PageHeader, StageBadge } from "@/components/app-ui";
+import { Icon } from "@/components/icons";
 import { Shell } from "@/components/shell";
 import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/session-core";
@@ -37,61 +38,75 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   };
   return (
     <Shell session={s} active="/clients">
-      <PageHeader
+      <PageHeader help="clients"
         title="Clientes"
         subtitle={`${total} ${total === 1 ? "cliente" : "clientes"}${q.q ? ` para “${q.q}”` : ""}`}
         actions={
           can(s, "client:write") && (
             <>
-              {can(s, "import:run") && <LinkButton href="/clients/import">⬆ Importar CSV</LinkButton>}
-              <LinkButton primary href="/clients/new">+ Nuevo cliente</LinkButton>
+              <LinkButton href="/board">Tablero</LinkButton>
+              {can(s, "import:run") && <LinkButton href="/clients/import" icon="upload">Importar CSV</LinkButton>}
+              <LinkButton primary href="/clients/new" icon="plus">Nuevo cliente</LinkButton>
             </>
           )
         }
       />
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
+        <div className="f-tabs">
           {TABS.map(([k, label]) => (
-            <Link key={k} href={href({ tab: k, page: 1 })} className={`rounded-full border px-3 py-1 text-sm ${q.tab === k ? "border-brand bg-brand text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}>
-              {label}
-            </Link>
+            <Link key={k} href={href({ tab: k, page: 1 })} className={`f-tab ${q.tab === k ? "active" : ""}`}>{label}</Link>
           ))}
         </div>
         <form action="/clients" className="flex gap-2">
           {q.tab !== "all" && <input type="hidden" name="tab" value={q.tab} />}
-          <input name="q" defaultValue={q.q} placeholder="Buscar por nombre o cédula / NIT" aria-label="Buscar" maxLength={100} className="w-72 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" />
-          <button className="rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold hover:bg-slate-50" type="submit">Buscar</button>
+          <label className="search">
+            <Icon name="search" />
+            <input name="q" defaultValue={q.q} placeholder="Buscar por nombre o cédula / NIT" aria-label="Buscar" maxLength={100} />
+          </label>
+          <button className="btn btn-secondary" type="submit">Buscar</button>
         </form>
       </div>
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full min-w-[820px] text-sm">
+      <div className="tbl-wrap">
+        <table className="min-w-[820px]">
           <thead>
-            <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
-              <th className="w-8 px-4 py-3" />
-              <th className="px-2 py-3">Cliente</th>
-              <th className="px-2 py-3">Tipo</th>
-              <th className="px-2 py-3">Docs</th>
-              <th className="px-2 py-3">Declaración</th>
-              <th className="px-2 py-3">Responsable</th>
-              <th className="px-2 py-3">Fecha límite</th>
+            <tr>
+              <th className="w-8" />
+              <th>Cliente</th>
+              <th>Cédula / NIT</th>
+              <th>Responsable</th>
+              <th>Tipo</th>
+              <th>Estado</th>
+              <th>Documentos</th>
+              <th>Fecha límite</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-500">No hay clientes con ese filtro.</td></tr>
+              <tr><td colSpan={8}><div className="empty"><h3>No hay clientes con ese filtro</h3></div></td></tr>
             )}
             {rows.map((c) => (
-              <tr key={c.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                <td className="px-4 py-3"><Dot color={c.color} /></td>
-                <td className="px-2 py-3">
-                  <Link href={`/clients/${c.id}`} className="font-semibold hover:underline">{c.name}</Link>
-                  <div className="text-xs text-slate-500">•••{c.docHint}{c.city ? ` · ${c.city}` : ""}</div>
+              <tr key={c.id}>
+                <td><Dot color={c.color} /></td>
+                <td>
+                  <Link href={`/clients/${c.id}`} className="flex items-center gap-2.5">
+                    <Avatar name={c.name} size={32} />
+                    <span>
+                      <span className="block text-[13.5px] font-semibold hover:underline" style={{ color: "var(--t1)" }}>{c.name}</span>
+                      <span className="block text-[11.5px]" style={{ color: "var(--t3)" }}>{c.city ?? "Sin ciudad"}</span>
+                    </span>
+                  </Link>
                 </td>
-                <td className="px-2 py-3">{c.kind === "natural" ? "Persona natural" : "Empresa"}</td>
-                <td className="px-2 py-3 tabular-nums">{c.docsReceived}/4</td>
-                <td className="px-2 py-3"><StageBadge stage={c.stage} /></td>
-                <td className="px-2 py-3">{c.responsibleName ?? <span className="text-slate-400">Sin asignar</span>}</td>
-                <td className="px-2 py-3 text-slate-600">{deadlineText(c.deadline)}</td>
+                <td className="whitespace-nowrap text-[12.5px]" style={{ color: "var(--t3)" }}>•••{c.docHint}</td>
+                <td>{c.responsibleName ? <span className="flex items-center gap-2"><Avatar name={c.responsibleName} size={24} />{c.responsibleName.split(" ")[0]}</span> : <span style={{ color: "var(--t4)" }}>Sin asignar</span>}</td>
+                <td><span className={`badge ${c.kind === "natural" ? "b-brand" : "b-purple"}`}>{c.kind === "natural" ? "Persona natural" : "Empresa"}</span></td>
+                <td><StageBadge stage={c.stage} /></td>
+                <td>
+                  <div className="flex items-center gap-2">
+                    <div className="prog" style={{ width: 48, height: 4 }}><div className="prog-fill" style={{ width: `${c.docsReceived * 25}%`, background: c.docsReceived === 4 ? "var(--green)" : c.docsReceived === 0 ? "var(--red)" : "var(--amber)" }} /></div>
+                    <span className="tabular-nums text-[12px]" style={{ color: "var(--t3)" }}>{c.docsReceived * 25}%</span>
+                  </div>
+                </td>
+                <td className="whitespace-nowrap text-[12.5px]" style={{ color: "var(--t3)" }}>{deadlineText(c.deadline)}</td>
               </tr>
             ))}
           </tbody>

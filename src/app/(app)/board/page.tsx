@@ -24,7 +24,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   const who = people.find((p) => p.id === raw.who)?.id;
   return (
     <Shell session={s} active="/board">
-      <PageHeader
+      <PageHeader help="board"
         title="Avance de todos los clientes"
         subtitle="Cada tarjeta tiene el color de su estado"
         actions={

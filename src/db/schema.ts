@@ -193,6 +193,13 @@ export const clients = pgTable(
     deadline: date("deadline", { mode: "string" }),
     stage: text("stage", { enum: CLIENT_STAGES }).notNull().default("pending"),
     importBatchId: uuid("import_batch_id"),
+    /** Follow-up marks used by the next-best-action engine (all manual, no automation). */
+    lastRemindedAt: timestamp("last_reminded_at", { withTimezone: true }),
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    /** Agreed fee in COP (whole pesos). */
+    feeCop: bigint("fee_cop", { mode: "number" }),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),

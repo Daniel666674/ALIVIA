@@ -4,7 +4,7 @@ import { inferKind, parseDoc, type ClientKind } from "./nit";
 export const MAX_IMPORT_BYTES = 4 * 1024 * 1024;
 export const MAX_IMPORT_ROWS = 5000;
 
-export const IMPORT_FIELDS = ["name", "lastName", "doc", "kind", "email", "phone", "city", "responsible", "deadline"] as const;
+export const IMPORT_FIELDS = ["name", "lastName", "doc", "kind", "email", "phone", "city", "responsible", "deadline", "fee"] as const;
 export type ImportField = (typeof IMPORT_FIELDS)[number];
 export type Mapping = Partial<Record<ImportField, string>>; // field -> CSV header
 
@@ -18,6 +18,7 @@ export const FIELD_LABELS: Record<ImportField, string> = {
   city: "Ciudad (opcional)",
   responsible: "Responsable (opcional)",
   deadline: "Fecha límite (opcional)",
+  fee: "Honorarios en pesos (opcional)",
 };
 
 const norm = (s: string) =>
@@ -33,6 +34,7 @@ const SYNONYMS: Record<ImportField, string[]> = {
   city: ["ciudad", "municipio"],
   responsible: ["responsable", "asignado", "contador", "encargado", "asignado a"],
   deadline: ["fecha limite", "vencimiento", "fecha de vencimiento", "fecha vencimiento", "fecha"],
+  fee: ["honorarios", "valor honorarios", "valor", "tarifa", "fee", "valor declaracion", "valor del servicio"],
 };
 
 /** Decode bytes as UTF-8, falling back to Windows-1252 (what Excel exports for Spanish by default). */
@@ -109,6 +111,7 @@ export type RowResult = {
     city: string | null;
     responsible: string | null;
     deadline: string | null;
+    fee: number | null;
   };
 };
 
@@ -194,6 +197,16 @@ export function validateRows(rows: Record<string, string>[], mapping: Mapping): 
       }
     }
 
+    let fee: number | null = null;
+    if (get("fee")) {
+      const n = Number(get("fee").replace(/[^\d]/g, ""));
+      if (Number.isFinite(n) && n > 0 && n < 10_000_000_000) fee = n;
+      else {
+        messages.push("Honorarios no válidos; se omitieron.");
+        warn = true;
+      }
+    }
+
     return {
       line,
       status: warn ? "warning" : "ok",
@@ -208,6 +221,7 @@ export function validateRows(rows: Record<string, string>[], mapping: Mapping): 
         city,
         responsible: get("responsible") || null,
         deadline,
+        fee,
       },
     };
   });

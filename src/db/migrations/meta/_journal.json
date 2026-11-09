@@ -43,6 +43,13 @@
       "when": 1794244916593,
       "tag": "0005_clients_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794247546630,
+      "tag": "0006_client_followup",
+      "breakpoints": true
     }
   ]
 }

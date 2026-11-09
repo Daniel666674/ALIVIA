@@ -36,6 +36,9 @@ export function NewClientForm({ people }: { people: Person[] }) {
       <label className={label}>Fecha límite
         <input name="deadline" type="date" className={`${inputCls} mt-1`} />
       </label>
+      <label className={label}>Honorarios (COP, opcional)
+        <input name="fee" inputMode="numeric" placeholder="1.600.000" className={`${inputCls} mt-1`} />
+      </label>
       <label className={`${label} sm:col-span-2`}>Responsable
         <select name="responsibleId" className={`${inputCls} mt-1`} defaultValue="">
           <option value="">Sin asignar</option>
@@ -48,7 +51,7 @@ export function NewClientForm({ people }: { people: Person[] }) {
   );
 }
 
-export function EditClientForm({ c, people }: { c: { id: string; name: string; email: string | null; phone: string | null; city: string | null; deadline: string | null; responsibleId: string | null }; people: Person[] }) {
+export function EditClientForm({ c, people }: { c: { id: string; name: string; email: string | null; phone: string | null; city: string | null; deadline: string | null; responsibleId: string | null; feeCop: number | null }; people: Person[] }) {
   const [state, action, pending] = useActionState(updateClientAction, undefined);
   return (
     <form action={action} className="grid gap-3 sm:grid-cols-2">
@@ -67,6 +70,9 @@ export function EditClientForm({ c, people }: { c: { id: string; name: string; e
       </label>
       <label className={label}>Fecha límite
         <input name="deadline" type="date" defaultValue={c.deadline ?? ""} className={`${inputCls} mt-1`} />
+      </label>
+      <label className={label}>Honorarios (COP)
+        <input name="fee" inputMode="numeric" defaultValue={c.feeCop ? c.feeCop.toLocaleString("es-CO") : ""} className={`${inputCls} mt-1`} />
       </label>
       <label className={`${label} sm:col-span-2`}>Responsable
         <select name="responsibleId" defaultValue={c.responsibleId ?? ""} className={`${inputCls} mt-1`}>

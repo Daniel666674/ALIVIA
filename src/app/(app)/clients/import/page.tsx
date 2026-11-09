@@ -87,7 +87,7 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
   if (view.kind === "upload") {
     return (
       <Shell session={s} active="/clients">
-        <PageHeader title="Importar clientes desde CSV" subtitle="Cargue su base actual. Revisamos cada fila antes de guardar nada." />
+        <PageHeader help="import" title="Importar clientes desde CSV" subtitle="Cargue su base actual. Revisamos cada fila antes de guardar nada." />
         <Steps at={1} />
         {q.undone !== undefined && <p className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Se deshizo la importación: se eliminaron {q.undone} clientes.</p>}
         {q.expired && <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">La importación venció. Suba el archivo de nuevo.</p>}
@@ -133,7 +133,7 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
   const sample = [...shown, ...okRows];
   return (
     <Shell session={s} active="/clients">
-      <PageHeader title="Revisar la importación" subtitle={`${draft.filename} · ${draft.rows.length} filas`} />
+      <PageHeader help="import" title="Revisar la importación" subtitle={`${draft.filename} · ${draft.rows.length} filas`} />
       <Steps at={2} />
       {q.error && <p role="alert" className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{q.error}</p>}
       <Panel title="1. ¿Qué columna es cada dato?" className="mb-5">

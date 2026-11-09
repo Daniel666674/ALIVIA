@@ -81,11 +81,7 @@ export async function resolveSession(tx: Tx, token: string): Promise<ResolvedSes
     await tx.update(sessions).set({ lastSeenAt: now }).where(eq(sessions.id, r.sessionId));
   }
 
-  const perms = await tx
-    .select({ key: permissions.key })
-    .from(rolePermissions)
-    .innerJoin(permissions, eq(permissions.id, rolePermissions.permissionId))
-    .where(eq(rolePermissions.roleId, r.roleId));
+  const perms = await tx.select({ key: permissions.key }).from(rolePermissions).innerJoin(permissions, eq(permissions.id, rolePermissions.permissionId)).where(eq(rolePermissions.roleId, r.roleId));
 
   return {
     sessionId: r.sessionId,

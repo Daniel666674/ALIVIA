@@ -141,6 +141,7 @@ export async function applyImport(tx: Tx, p: { firmId: string; userId: string; b
       phone: r.data!.phone,
       city: r.data!.city,
       deadline: r.data!.deadline,
+      feeCop: r.data!.fee,
       responsibleId: resolveId(r.data!.responsible),
       importBatchId: p.batchId,
     })),
