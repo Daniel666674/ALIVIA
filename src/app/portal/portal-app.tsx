@@ -9,10 +9,10 @@ type Scenario = "real" | "inicio" | "proceso" | "presentada" | "aldia";
 type TabKey = "inicio" | "documentos" | "declaraciones" | "pagos" | "mensajes" | "obligaciones";
 type DocKey = "bank_cert" | "rut" | "dian_key" | "id_doc";
 
-const TIERS: { key: Tier; label: string; rank: number }[] = [
-  { key: "esencial", label: "Esencial", rank: 0 },
-  { key: "plus", label: "Plus", rank: 1 },
-  { key: "empresas", label: "Empresas", rank: 2 },
+const TIERS: { key: Tier; label: string; rank: number; price: string }[] = [
+  { key: "esencial", label: "Esencial", rank: 0, price: "$60.000 al año" },
+  { key: "plus", label: "Plus", rank: 1, price: "$96.000 al año" },
+  { key: "empresas", label: "Empresas", rank: 2, price: "desde $720.000 al año" },
 ];
 const SCENARIOS: { key: Scenario; label: string }[] = [
   { key: "real", label: "Datos del cliente" },
@@ -167,7 +167,7 @@ export function PortalPreview({ model, options }: { model: PortalModel; options:
                 <div className="mt-4 rounded-xl bg-slate-50 p-3 text-[12px] text-slate-600">
                   <div className="font-semibold text-slate-800">Su contador</div>
                   <div className="mt-0.5">{model.responsible}</div>
-                  <div className="mt-2 text-slate-500">Plan <b className="text-slate-700">{TIERS.find((t) => t.key === tier)!.label}</b></div>
+                  <div className="mt-2 text-slate-500">Plan <b className="text-slate-700">{TIERS.find((t) => t.key === tier)!.label}</b><div className="text-[11px] text-slate-400">{TIERS.find((t) => t.key === tier)!.price}</div></div>
                 </div>
               </nav>
             )}
@@ -451,7 +451,7 @@ function Upsell({ tab, onUpgrade }: { tab: TabKey; onUpgrade: (t: Tier) => void 
       <Pill tone="blue">Disponible en el plan {need.label}</Pill>
       <h1 className="mt-3 text-[20px] font-extrabold text-slate-900">{u.title}</h1>
       <ul className="mx-auto mt-3 max-w-xs space-y-1.5 text-left text-[13.5px] text-slate-600">{u.bullets.map((b) => <li key={b} className="flex gap-2"><span className="text-emerald-500">✓</span>{b}</li>)}</ul>
-      <button onClick={() => onUpgrade(need.key)} className="mt-5 rounded-xl bg-indigo-600 px-6 py-3 text-[14px] font-bold text-white hover:bg-indigo-700">Activar plan {need.label}</button>
+      <button onClick={() => onUpgrade(need.key)} className="mt-5 rounded-xl bg-indigo-600 px-6 py-3 text-[14px] font-bold text-white hover:bg-indigo-700">Activar plan {need.label} · {need.price}</button>
       <p className="mt-2 text-[11.5px] text-slate-400">Demostración: así se le ofrece la mejora a su cliente.</p>
     </div>
   );

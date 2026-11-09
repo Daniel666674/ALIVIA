@@ -159,18 +159,21 @@ export const INTEGRATIONS: CatalogItem[] = [
 export const PORTAL_TIERS = [
   {
     name: "Esencial",
-    tag: "Para todos los clientes",
+    price: "$60.000 al año",
+    tag: "Para personas naturales",
     items: ["Subir sus 4 documentos desde el celular", "Ver el estado de su declaración (el semáforo)", "Recordatorios automáticos de lo que falta"],
     grows: "Es la puerta de entrada: el cliente deja de llamar a preguntar «¿cómo va lo mío?».",
   },
   {
     name: "Plus",
+    price: "$96.000 al año",
     tag: "Clientes que quieren más control",
     items: ["Descargar sus declaraciones y soportes", "Pagar honorarios en línea", "Firmar documentos electrónicamente", "Canal directo con su contador"],
     grows: "Se cobra como suscripción mensual o anual de acceso.",
   },
   {
     name: "Empresas",
+    price: "$720.000 – $900.000 al año",
     tag: "Los ~30 clientes empresa",
     items: ["Tablero de obligaciones y vencimientos", "Facturas y pagos conectados a su software contable", "Varios usuarios por empresa", "Reportes mensuales"],
     grows: "Servicio premium con ingreso recurrente más alto, sobre la misma plataforma.",
