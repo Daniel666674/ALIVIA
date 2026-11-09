@@ -52,6 +52,16 @@ export const HELP: Record<string, HelpEntry> = {
     see: "En qué etapa va la declaración de este cliente: sin presentar, en preparación, en revisión o presentada.",
     use: ["Use los botones de arriba a la derecha para avanzar la etapa.", "Al marcarla “Presentada” el cliente pasa a verde y aparecen las acciones de avisar, entregar carpeta y cobrar."],
   },
+  "client.profile": {
+    title: "Ficha del cliente",
+    see: "Todo sobre este cliente en un solo lugar: su avance, sus documentos, tareas, notas y datos de contacto.",
+    use: ["La barra de colores arriba muestra en qué punto va: de “Sin presentar” hasta “Honorarios pagados”.", "Use las pestañas para ir a Documentos, Tareas, Seguimiento, Notas o Historial.", "Los botones de arriba a la derecha piden documentos por WhatsApp, escriben un correo o llaman.", "“Editar datos” abre el formulario para corregir correo, teléfono, responsable y más."],
+  },
+  "client.notes": {
+    title: "Notas internas",
+    see: "Un cuaderno del cliente para su equipo: acuerdos, cosas que pidió, pendientes.",
+    use: ["Escriba la nota y toque “Agregar nota”; queda con su nombre y la hora.", "Solo usted puede eliminar sus propias notas.", "Las notas se guardan cifradas y no las ve el cliente."],
+  },
   "client.tasks": {
     title: "Tareas del cliente",
     see: "Las cosas por hacer relacionadas con este cliente.",

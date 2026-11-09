@@ -10,6 +10,7 @@ export type AuditAction =
   | "client.created" | "client.updated" | "client.stage" | "client.deleted"
   | "import.applied" | "import.rolled_back"
   | "document.uploaded" | "document.downloaded" | "document.status" | "document.deleted"
+  | "note.created"
   | "task.created" | "task.done" | "task.deleted";
 
 export async function audit(

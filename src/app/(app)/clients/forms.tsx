@@ -2,7 +2,7 @@
 
 import { useActionState, useRef } from "react";
 import { btnGhost, btnPrimary, inputCls } from "@/components/app-ui";
-import { createClientAction, createTaskAction, updateClientAction, uploadDocumentAction } from "./actions";
+import { createClientAction, createTaskAction, updateClientAction, addNoteAction, uploadDocumentAction } from "./actions";
 
 type Person = { id: string; name: string };
 const label = "block text-sm font-medium text-slate-700";
@@ -124,6 +124,22 @@ export function TaskForm({ people, clients, clientId }: { people: Person[]; clie
         </select>
       )}
       {state?.error && <p role="alert" className="text-sm text-red-600 sm:col-span-4">{state.error}</p>}
+    </form>
+  );
+}
+
+export function NoteForm({ clientId }: { clientId: string }) {
+  const [state, action, pending] = useActionState(addNoteAction, undefined);
+  const ref = useRef<HTMLFormElement>(null);
+  return (
+    <form ref={ref} action={async (fd) => { await (action as (f: FormData) => Promise<void>)(fd); ref.current?.reset(); }} className="space-y-2">
+      <input type="hidden" name="clientId" value={clientId} />
+      <textarea name="body" required rows={3} maxLength={2000} placeholder="Escriba una nota interna: algo que pidió el cliente, un acuerdo, un pendiente…" aria-label="Nota" className={inputCls} />
+      <div className="flex items-center gap-3">
+        <button className={btnPrimary} disabled={pending}>{pending ? "Guardando…" : "Agregar nota"}</button>
+        <span className="text-xs text-slate-500">Solo la ve su equipo. Se guarda cifrada.</span>
+      </div>
+      {state?.error && <p role="alert" className="text-sm text-red-600">{state.error}</p>}
     </form>
   );
 }

@@ -12,6 +12,7 @@ import { limitOrMessage, type FormState } from "@/lib/auth/actions-shared";
 import { MAX_FILE_BYTES, UploadError, deleteFile, setDocumentStatus, uploadDocument } from "@/lib/clients/documents";
 import { parseDoc } from "@/lib/clients/nit";
 import { LimitError, createClient, markClient, setStage, softDeleteClient, updateClient } from "@/lib/clients/service";
+import { addNote, deleteNote } from "@/lib/clients/notes";
 import { createTask, deleteTask, setTaskDone } from "@/lib/clients/tasks";
 
 const optional = (max: number) => z.string().trim().max(max).transform((v) => (v === "" ? null : v));
@@ -59,7 +60,7 @@ export async function createClientAction(_: FormState, form: FormData): Promise<
   redirect(`/clients/${result.id}`);
 }
 
-const EditForm = ClientForm.omit({ kind: true, doc: true }).extend({ id: Id, doc: optional(40) });
+const EditForm = ClientForm.omit({ kind: true, doc: true }).extend({ id: Id, doc: z.string().trim().max(40).optional() });
 
 export async function updateClientAction(_: FormState, form: FormData): Promise<FormState> {
   const s = await requirePermission("client:write");
@@ -230,4 +231,29 @@ export async function recordContactAction(clientId: string, via: "request_docs" 
   revalidatePath("/dashboard");
   revalidatePath("/actions");
   revalidatePath(`/clients/${id}`);
+}
+
+const NoteForm = z.object({ clientId: Id, body: z.string().trim().min(1, "Escriba la nota.").max(2000, "La nota es muy larga (máximo 2000 caracteres).") });
+
+export async function addNoteAction(_: FormState, form: FormData): Promise<FormState> {
+  const s = await requirePermission("client:write");
+  const parsed = NoteForm.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return { error: firstError(parsed.error) };
+  const req = await requestInfo();
+  const denied = await limitOrMessage("general", s.user.id, req, { firmId: s.user.firmId, userId: s.user.id });
+  if (denied) return { error: denied };
+  await withTenant(s.user.firmId, async (tx) => {
+    await addNote(tx, s.user.firmId, parsed.data.clientId, s.user.id, parsed.data.body);
+    await audit(tx, { action: "note.created", firmId: s.user.firmId, userId: s.user.id, resourceType: "client", resourceId: parsed.data.clientId, req });
+  });
+  revalidatePath(`/clients/${parsed.data.clientId}`);
+  return undefined;
+}
+
+export async function deleteNoteAction(form: FormData) {
+  const s = await requirePermission("client:write");
+  const noteId = Id.parse(form.get("noteId"));
+  const clientId = Id.parse(form.get("clientId"));
+  await withTenant(s.user.firmId, (tx) => deleteNote(tx, s.user.firmId, noteId, s.user.id));
+  revalidatePath(`/clients/${clientId}`);
 }

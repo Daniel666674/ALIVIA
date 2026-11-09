@@ -62,7 +62,7 @@ describe("WhatsApp helpers", () => {
   it("writes the message and encodes the link", () => {
     const m = waMessage("request_docs", { name: "Carlos Ruiz Mejía", kind: "natural", firm: "Firma Demo", missing: ["RUT", "Cédula"] });
     expect(m).toContain("Hola Carlos");
-    expect(m).toContain("RUT, Cédula");
+    expect(m).toContain("• RUT\n• Cédula");
     expect(waLink("573105554242", m)).toMatch(/^https:\/\/wa\.me\/573105554242\?text=Hola%20Carlos/);
     expect(waMessage("collect", { name: "Ferretería SAS", kind: "empresa", firm: "F", fee: 1600000 })).toContain("equipo de Ferretería SAS");
   });

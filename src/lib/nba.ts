@@ -150,8 +150,8 @@ export function waNumber(raw: string | null | undefined): string | null {
 export function waMessage(kind: "request_docs" | "notify" | "collect", p: { name: string; kind: "natural" | "empresa"; firm: string; missing?: string[]; fee?: number | null }): string {
   const hello = p.kind === "natural" ? `Hola ${p.name.split(/\s+/)[0]}` : `Hola, equipo de ${p.name}`;
   if (kind === "request_docs") {
-    const list = p.missing?.length ? p.missing.join(", ") : "algunos documentos";
-    return `${hello}, le escribimos de ${p.firm}. Para preparar su declaración nos faltan: ${list}. ¿Nos los puede enviar? Muchas gracias.`;
+    const list = p.missing?.length ? p.missing.map((m) => `• ${m}`).join("\n") : "• Algunos documentos";
+    return `${hello}, le escribimos de ${p.firm}. Para preparar su declaración nos faltan estos documentos:\n${list}\n\n¿Nos los puede enviar por este chat? Muchas gracias.`;
   }
   if (kind === "notify") return `${hello}, le informamos que su declaración ya fue presentada ante la DIAN. En los próximos días le entregamos su carpeta. Gracias por confiar en ${p.firm}.`;
   return `${hello}, le recordamos el pago de los honorarios por su declaración${p.fee ? ` (${cop(p.fee)})` : ""}. ¿Nos confirma cuándo podría hacerlo? Muchas gracias. — ${p.firm}`;

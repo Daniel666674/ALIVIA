@@ -31,10 +31,11 @@ export async function loadNba(tx: Tx, firmId: string, opts: { limit?: number; on
 }
 
 /** Ready-made WhatsApp links for one client (notify / collect), or null when there is no valid phone. */
-export async function waLinksFor(tx: Tx, firmId: string, clientId: string): Promise<{ notify: string | null; collect: string | null }> {
+export async function waLinksFor(tx: Tx, firmId: string, clientId: string): Promise<{ request: string | null; notify: string | null; collect: string | null }> {
   const [[c], phones, firm] = await Promise.all([nbaClients(tx, firmId, clientId), clientPhones(tx, firmId, [clientId]), firmName(tx, firmId)]);
   const num = waNumber(phones.get(clientId));
-  if (!c || !num) return { notify: null, collect: null };
+  if (!c || !num) return { request: null, notify: null, collect: null };
   const base = { name: c.name, kind: c.kind, firm, fee: c.feeCop };
-  return { notify: waLink(num, waMessage("notify", base)), collect: waLink(num, waMessage("collect", base)) };
+  const missing = c.pendingKinds.map((k) => DOC_LABEL[k as keyof typeof DOC_LABEL]);
+  return { request: waLink(num, waMessage("request_docs", { ...base, missing })), notify: waLink(num, waMessage("notify", base)), collect: waLink(num, waMessage("collect", base)) };
 }

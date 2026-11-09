@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { clientDocuments, clients, firms, importBatches } from "@/db/schema";
 import { applyImport, createDraft, previewImport, rollbackImport, saveMapping } from "@/lib/clients/import";
-import { LimitError, createClient, dashboardStats, getClient, listClients, setStage, softDeleteClient } from "@/lib/clients/service";
+import { LimitError, createClient, nbaClients, dashboardStats, getClient, listClients, setStage, softDeleteClient } from "@/lib/clients/service";
 import { createTestDb, seedFirm } from "./helpers/db";
 
 let t: Awaited<ReturnType<typeof createTestDb>>;
@@ -202,5 +202,17 @@ describe("tasks", () => {
     await t.tenant(A(), (tx) => setTaskDone(tx, A(), id, true));
     expect(await t.tenant(A(), (tx) => listTasks(tx, A(), { status: "open" }))).toHaveLength(0);
     await expect(t.tenant(A(), (tx) => createTask(tx, { firmId: A(), userId: a.users[0]!.id, title: "x", assigneeId: b.users[0]!.id }))).rejects.toThrow();
+  });
+});
+
+describe("next best action inputs", () => {
+  it("reports each client's pending and received documents (single-table query)", async () => {
+    const r = await t.tenant(A(), (tx) => createClient(tx, A(), { kind: "natural", name: "Pendientes Prueba", docNumber: "1098765432" }));
+    const id = (r as { id: string }).id;
+    await t.admin.update(clientDocuments).set({ status: "received" }).where(and(eq(clientDocuments.clientId, id), eq(clientDocuments.kind, "rut")));
+    const [c] = await t.tenant(A(), (tx) => nbaClients(tx, A(), id));
+    expect(c!.pendingKinds.length).toBeGreaterThan(0);
+    expect(c!.pendingKinds).not.toContain("rut");
+    expect(c!.docsReceived + c!.pendingKinds.length).toBe(4);
   });
 });

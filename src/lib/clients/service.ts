@@ -92,7 +92,7 @@ export async function createClient(tx: Tx, firmId: string, c: NewClient): Promis
 
 // ---- reading -------------------------------------------------------------------------------
 
-const docsReceivedSql = sql<number>`(SELECT count(*)::int FROM client_documents d WHERE d.client_id = ${clients.id} AND d.status <> 'pending')`;
+const docsReceivedSql = sql<number>`(SELECT count(*)::int FROM client_documents d WHERE d.client_id = "clients"."id" AND d.status <> 'pending')`;
 
 export type ListFilter = {
   tab?: "all" | "natural" | "empresa" | "red" | "mine";
@@ -363,8 +363,8 @@ export async function nbaClients(tx: Tx, firmId: string, onlyId?: string): Promi
       id: clients.id, name: clients.name, kind: clients.kind, stage: clients.stage, deadline: clients.deadline, responsibleId: clients.responsibleId,
       lastRemindedAt: clients.lastRemindedAt, notifiedAt: clients.notifiedAt, deliveredAt: clients.deliveredAt, paidAt: clients.paidAt, feeCop: clients.feeCop,
       received: docsReceivedSql,
-      toReview: sql<number>`(SELECT count(*)::int FROM client_documents d WHERE d.client_id = ${clients.id} AND d.status = 'received')`,
-      pending: sql<string | null>`(SELECT string_agg(d.kind, ',') FROM client_documents d WHERE d.client_id = ${clients.id} AND d.status = 'pending')`,
+      toReview: sql<number>`(SELECT count(*)::int FROM client_documents d WHERE d.client_id = "clients"."id" AND d.status = 'received')`,
+      pending: sql<string | null>`(SELECT string_agg(d.kind, ',') FROM client_documents d WHERE d.client_id = "clients"."id" AND d.status = 'pending')`,
     })
     .from(clients)
     .where(and(eq(clients.firmId, firmId), isNull(clients.deletedAt), ...(onlyId ? [eq(clients.id, onlyId)] : [])))

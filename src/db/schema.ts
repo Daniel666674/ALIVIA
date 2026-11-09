@@ -277,6 +277,19 @@ export const tasks = pgTable(
   (t) => [index("tasks_firm_status_idx").on(t.firmId, t.status, t.dueDate), index("tasks_client_idx").on(t.clientId)],
 );
 
+export const clientNotes = pgTable(
+  "client_notes",
+  {
+    id: id(),
+    firmId: uuid("firm_id").notNull().references(() => firms.id),
+    clientId: uuid("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id").notNull(),
+    bodyEnc: text("body_enc").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("client_notes_client_idx").on(t.clientId, t.createdAt)],
+);
+
 export const importBatches = pgTable(
   "import_batches",
   {
