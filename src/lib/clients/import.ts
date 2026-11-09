@@ -3,7 +3,7 @@ import { and, eq, inArray, isNull, lt } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import { clients, importBatches } from "@/db/schema";
 import { decryptField, encryptField } from "@/lib/crypto";
-import { MAX_IMPORT_BYTES, parseCsv, suggestMapping, validateRows, type Mapping, type RowResult } from "./csv";
+import { MAX_IMPORT_BYTES, parseSpreadsheet, suggestMapping, validateRows, type Mapping, type RowResult } from "./csv";
 import { assertCapacity, docIdx, firmUsers, insertClients } from "./service";
 
 const DRAFT_TTL_MS = 2 * 60 * 60 * 1000;
@@ -14,7 +14,7 @@ type Draft = { headers: string[]; rows: Record<string, string>[]; mapping: Mappi
 export async function createDraft(tx: Tx, p: { firmId: string; userId: string; filename: string; bytes: Buffer }) {
   if (p.bytes.length > MAX_IMPORT_BYTES) throw new Error("El archivo supera 4 MB.");
   await tx.delete(importBatches).where(and(eq(importBatches.status, "draft"), lt(importBatches.expiresAt, new Date())));
-  const parsed = parseCsv(p.bytes);
+  const parsed = await parseSpreadsheet(p.bytes);
   const mapping = suggestMapping(parsed.headers);
   const [b] = await tx
     .insert(importBatches)

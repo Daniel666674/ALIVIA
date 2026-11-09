@@ -155,6 +155,21 @@ export const auditLog = pgTable(
   (t) => [index("audit_firm_at_idx").on(t.firmId, t.at)],
 );
 
+/** Product-usage telemetry for onboarding: what people click and where they get stuck. Never holds client data. */
+export const usageEvents = pgTable(
+  "usage_events",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    firmId: uuid("firm_id").notNull().references(() => firms.id),
+    userId: uuid("user_id").notNull(),
+    event: text("event").notNull(),
+    path: text("path").notNull(),
+    meta: jsonb("meta").$type<Record<string, string | number | boolean>>().notNull().default({}),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("usage_firm_at_idx").on(t.firmId, t.at), index("usage_firm_event_idx").on(t.firmId, t.event)],
+);
+
 /** Sliding-window hits for the DB-backed rate limiter (used when Redis isn't configured). */
 export const rateLimitHits = pgTable(
   "rate_limit_hits",

@@ -17,7 +17,7 @@ const Id = z.string().uuid();
 export async function uploadCsvAction(_: FormState, form: FormData): Promise<FormState> {
   const s = await requirePermission("import:run");
   const file = form.get("file");
-  if (!(file instanceof File) || file.size === 0) return { error: "Elija un archivo CSV." };
+  if (!(file instanceof File) || file.size === 0) return { error: "Elija un archivo de Excel (.xlsx) o CSV." };
   if (file.size > MAX_IMPORT_BYTES) return { error: "El archivo supera 4 MB." };
   const req = await requestInfo();
   const denied = await limitOrMessage("csvImport", s.user.id, req, { firmId: s.user.firmId, userId: s.user.id });

@@ -67,6 +67,11 @@ export function parseCsv(buf: Buffer): ParsedCsv {
   } catch {
     throw new Error("No se pudo leer el archivo. Guárdelo como CSV (UTF-8) desde Excel e intente de nuevo.");
   }
+  return recordsToParsed(records, delimiter, encoding);
+}
+
+/** Shared by CSV and XLSX: first row = headers, de-duplicated; every cell a trimmed string. */
+export function recordsToParsed(records: string[][], delimiter: string, encoding: string): ParsedCsv {
   if (records.length < 2) throw new Error("El archivo no tiene filas de datos.");
   const rawHeaders = records[0]!.map((h, i) => (h || `Columna ${i + 1}`).trim());
   // De-duplicate header names so every column stays addressable.
@@ -80,6 +85,38 @@ export function parseCsv(buf: Buffer): ParsedCsv {
   if (dataRows.length > MAX_IMPORT_ROWS) throw new Error(`El archivo supera el máximo de ${MAX_IMPORT_ROWS} filas.`);
   const rows = dataRows.map((r) => Object.fromEntries(headers.map((h, i) => [h, (r[i] ?? "").toString()])));
   return { headers, rows, delimiter, encoding };
+}
+
+const isZip = (b: Buffer) => b.length > 4 && b[0] === 0x50 && b[1] === 0x4b && b[2] === 0x03 && b[3] === 0x04;
+const isOldXls = (b: Buffer) => b.length > 8 && b[0] === 0xd0 && b[1] === 0xcf && b[2] === 0x11 && b[3] === 0xe0;
+const pad = (n: number) => String(n).padStart(2, "0");
+
+function cellText(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  if (v instanceof Date) return `${pad(v.getUTCDate())}/${pad(v.getUTCMonth() + 1)}/${v.getUTCFullYear()}`;
+  if (typeof v === "number") return Number.isInteger(v) ? v.toFixed(0) : String(v);
+  if (typeof v === "boolean") return v ? "Sí" : "No";
+  return String(v).trim();
+}
+
+/** Reads a CSV or an Excel (.xlsx) file; the type is detected from the file's bytes, not its name. */
+export async function parseSpreadsheet(buf: Buffer): Promise<ParsedCsv> {
+  if (buf.length === 0) throw new Error("El archivo está vacío.");
+  if (isOldXls(buf)) throw new Error("Este es un Excel antiguo (.xls). Ábralo y guárdelo como .xlsx o CSV, e intente de nuevo.");
+  if (!isZip(buf)) return parseCsv(buf);
+  const { default: readXlsxFile } = await import("read-excel-file/node");
+  let sheets;
+  try {
+    sheets = await readXlsxFile(buf);
+  } catch {
+    throw new Error("No se pudo leer el Excel. Verifique que no esté protegido con contraseña, o guárdelo como CSV.");
+  }
+  // First sheet that actually has data (the first one is sometimes a cover page).
+  const sheet = sheets.find((sh) => sh.data.length >= 2) ?? sheets[0];
+  if (!sheet || sheet.data.length < 2) throw new Error("El Excel no tiene filas de datos.");
+  if (sheet.data.length > MAX_IMPORT_ROWS + 1) throw new Error(`El archivo supera el máximo de ${MAX_IMPORT_ROWS} filas.`);
+  const records = sheet.data.map((r) => r.map(cellText)).filter((r) => r.some((c) => c !== ""));
+  return recordsToParsed(records, "xlsx", "xlsx");
 }
 
 /** Guess which CSV column feeds each field, using Spanish header synonyms. */

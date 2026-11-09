@@ -50,6 +50,13 @@
       "when": 1794247546630,
       "tag": "0006_client_followup",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794248149741,
+      "tag": "0007_usage_events",
+      "breakpoints": true
     }
   ]
 }

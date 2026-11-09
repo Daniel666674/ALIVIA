@@ -45,7 +45,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
           can(s, "client:write") && (
             <>
               <LinkButton href="/board">Tablero</LinkButton>
-              {can(s, "import:run") && <LinkButton href="/clients/import" icon="upload">Importar CSV</LinkButton>}
+              {can(s, "import:run") && <LinkButton href="/clients/import" icon="upload">Importar clientes</LinkButton>}
               <LinkButton primary href="/clients/new" icon="plus">Nuevo cliente</LinkButton>
             </>
           )

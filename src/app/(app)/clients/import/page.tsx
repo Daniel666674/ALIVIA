@@ -87,7 +87,7 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
   if (view.kind === "upload") {
     return (
       <Shell session={s} active="/clients">
-        <PageHeader help="import" title="Importar clientes desde CSV" subtitle="Cargue su base actual. Revisamos cada fila antes de guardar nada." />
+        <PageHeader help="import" title="Importar clientes desde Excel o CSV" subtitle="Cargue su base actual. Revisamos cada fila antes de guardar nada." />
         <Steps at={1} />
         {q.undone !== undefined && <p className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Se deshizo la importación: se eliminaron {q.undone} clientes.</p>}
         {q.expired && <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">La importación venció. Suba el archivo de nuevo.</p>}
@@ -95,7 +95,7 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
           <Panel title="1. Suba su archivo"><UploadCsvForm /></Panel>
           <Panel title="Cómo preparar el archivo">
             <ul className="list-disc space-y-1.5 pl-5 text-sm text-slate-700">
-              <li>En Excel: <b>Archivo → Guardar como → CSV</b>.</li>
+              <li>Puede subir el archivo de <b>Excel (.xlsx)</b> tal como está, o un <b>CSV</b>.</li>
               <li>Necesita al menos el <b>nombre</b> y la <b>cédula o NIT</b> de cada cliente.</li>
               <li>Opcionales: tipo, correo, teléfono, ciudad, responsable y fecha límite.</li>
               <li>El sistema reconoce los nombres de columna más comunes y le deja corregirlos.</li>

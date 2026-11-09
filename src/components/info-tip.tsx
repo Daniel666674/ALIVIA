@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { track } from "@/components/usage-tracker";
 import type { HelpEntry } from "@/lib/help";
 
 /**
@@ -38,7 +39,7 @@ export function InfoTip({ entry, align = "left" }: { entry: HelpEntry; align?: "
         aria-label={`Ayuda: ${entry.title}`}
         aria-expanded={visible}
         aria-controls={id}
-        onClick={() => setPinned((p) => !p)}
+        onClick={() => { if (!pinned) track("help.open", { topic: entry.title.slice(0, 40) }); setPinned((p) => !p); }}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
       >

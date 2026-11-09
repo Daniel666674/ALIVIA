@@ -35,7 +35,7 @@ export const HELP: Record<string, HelpEntry> = {
   "clients": {
     title: "Clientes",
     see: "Todos los clientes de la firma. El punto de color es el semáforo: rojo = sin documentos, amarillo = faltan algunos, azul = en preparación, verde = declaración presentada.",
-    use: ["Filtre por tipo o por estado con las pestañas y busque por nombre o por cédula/NIT completo.", "“Mis clientes” muestra solo los suyos.", "Toque un cliente para abrir su ficha.", "“Importar CSV” carga muchos clientes de una vez; “Tablero” los muestra por color."],
+    use: ["Filtre por tipo o por estado con las pestañas y busque por nombre o por cédula/NIT completo.", "“Mis clientes” muestra solo los suyos.", "Toque un cliente para abrir su ficha.", "“Importar” carga muchos clientes de una vez; “Tablero” los muestra por color."],
   },
   "client.docs": {
     title: "Documentos base",
@@ -59,8 +59,8 @@ export const HELP: Record<string, HelpEntry> = {
   },
   "import": {
     title: "Importar clientes",
-    see: "Un asistente de 3 pasos para cargar su base de clientes desde un archivo CSV.",
-    use: ["1) Suba el CSV (en Excel: Archivo → Guardar como → CSV).", "2) Revise qué columna es cada dato y la vista previa: los errores se omiten y se le explican.", "3) Confirme. Si algo sale mal, “Deshacer” borra solo lo que creó esta importación."],
+    see: "Un asistente de 3 pasos para cargar su base de clientes desde un archivo de Excel (.xlsx) o CSV.",
+    use: ["1) Suba su Excel (.xlsx) o CSV tal como lo tiene.", "2) Revise qué columna es cada dato y la vista previa: los errores se omiten y se le explican.", "3) Confirme. Si algo sale mal, “Deshacer” borra solo lo que creó esta importación."],
   },
   "board": {
     title: "Tablero",
@@ -80,7 +80,7 @@ export const HELP: Record<string, HelpEntry> = {
   "automations": {
     title: "Automatizaciones",
     see: "Reglas que harán trabajo repetitivo por usted (recordatorios por correo, avisos).",
-    use: ["Hoy están en “Próximamente”. Mientras tanto, use el botón de WhatsApp de cada acción sugerida."],
+    use: ["Cada tarjeta explica qué hace, cómo ayuda y hasta dónde puede crecer. Marque “Me interesa” en las que quiera: así sabemos qué construir primero."],
   },
   "reports": {
     title: "Reportes",
