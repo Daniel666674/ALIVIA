@@ -138,6 +138,13 @@ export function suggestMapping(headers: string[]): Mapping {
       used.add(partial);
     }
   }
+  // A "Tipo de entrega" column often mixes the person who delivers (María) with a city (Chía):
+  // it feeds both fields and each value goes to the one it fits (see validateRows).
+  const delivery = headers.find((h) => !used.has(h) && /entrega/.test(norm(h)));
+  if (delivery && !mapping.responsible && !mapping.city) {
+    mapping.responsible = delivery;
+    mapping.city = delivery;
+  }
   return mapping;
 }
 
@@ -173,7 +180,7 @@ function parseDate(raw: string): string | null {
   return dt.toISOString().slice(0, 10);
 }
 
-const CITIES = ["Bogotá", "Medellín", "Cali", "Barranquilla", "Cartagena", "Bucaramanga", "Cúcuta", "Pereira", "Manizales", "Ibagué", "Villavicencio", "Popayán", "Pasto", "Montería", "Neiva", "Armenia", "Santa Marta", "Tunja", "Valledupar", "Sincelejo", "Riohacha", "Florencia", "Yopal", "Quibdó", "Soacha", "Bello", "Envigado", "Itagüí", "Sabaneta", "Chía", "Zipaquirá", "Cajicá", "Mosquera", "Facatativá", "Fusagasugá", "Girardot", "Palmira", "Buenaventura", "Tuluá", "Rionegro", "Duitama", "Sogamoso", "Barrancabermeja", "Apartadó"];
+const CITIES = ["Bogotá", "Medellín", "Cali", "Barranquilla", "Cartagena", "Bucaramanga", "Cúcuta", "Pereira", "Manizales", "Ibagué", "Villavicencio", "Popayán", "Pasto", "Montería", "Neiva", "Armenia", "Santa Marta", "Tunja", "Valledupar", "Sincelejo", "Riohacha", "Florencia", "Yopal", "Quibdó", "Soacha", "Bello", "Envigado", "Itagüí", "Sabaneta", "Chía", "Cota", "Zipaquirá", "Cajicá", "Mosquera", "Facatativá", "Fusagasugá", "Girardot", "Palmira", "Buenaventura", "Tuluá", "Rionegro", "Duitama", "Sogamoso", "Barrancabermeja", "Apartadó"];
 const CITY_BY_KEY = new Map(CITIES.map((c) => [norm(c), c]));
 
 const titleCase = (s: string) =>
@@ -181,7 +188,16 @@ const titleCase = (s: string) =>
     ? s.toLowerCase().replace(/(^|[\s.-])(\p{L})/gu, (_, a: string, b: string) => a + b.toUpperCase())
     : s;
 
-export function validateRows(rows: Record<string, string>[], mapping: Mapping): RowResult[] {
+export type DateShift = { month: number; year: number } | null | undefined;
+
+/** Moves a YYYY-MM-DD date to another month/year, keeping the day (clamped to the month's length). */
+export function shiftDate(iso: string, shift: NonNullable<DateShift>): string {
+  const day = Number(iso.slice(8, 10));
+  const last = new Date(Date.UTC(shift.year, shift.month, 0)).getUTCDate();
+  return `${shift.year}-${String(shift.month).padStart(2, "0")}-${String(Math.min(day, last)).padStart(2, "0")}`;
+}
+
+export function validateRows(rows: Record<string, string>[], mapping: Mapping, shift?: DateShift): RowResult[] {
   const seenDocs = new Map<string, number>();
   return rows.map((row, i): RowResult => {
     const line = i + 2;
@@ -243,12 +259,15 @@ export function validateRows(rows: Record<string, string>[], mapping: Mapping): 
         warn = true;
       }
     }
-    const cityRaw = get("city");
+    const mixed = !!mapping.city && mapping.city === mapping.responsible;
+    const mixedIsCity = mixed && CITY_BY_KEY.has(norm(get("city")));
+    const cityRaw = mixed && !mixedIsCity ? "" : get("city");
     const city = cityRaw ? (CITY_BY_KEY.get(norm(cityRaw)) ?? titleCase(cityRaw.slice(0, 80))) : null;
 
     let deadline: string | null = null;
     if (get("deadline")) {
       deadline = parseDate(get("deadline"));
+      if (deadline && shift) deadline = shiftDate(deadline, shift);
       if (!deadline) {
         messages.push("Fecha límite no válida (use DD/MM/AAAA); se omitió.");
         warn = true;
@@ -278,7 +297,7 @@ export function validateRows(rows: Record<string, string>[], mapping: Mapping): 
         email,
         phone,
         city,
-        responsible: get("responsible") || null,
+        responsible: (mixed && mixedIsCity ? "" : get("responsible")) || null,
         deadline,
         fee,
       },

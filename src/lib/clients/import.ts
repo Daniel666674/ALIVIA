@@ -3,13 +3,13 @@ import { and, eq, inArray, isNull, lt } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import { clients, importBatches } from "@/db/schema";
 import { decryptField, encryptField } from "@/lib/crypto";
-import { MAX_IMPORT_BYTES, parseSpreadsheet, suggestMapping, validateRows, type Mapping, type RowResult } from "./csv";
+import { MAX_IMPORT_BYTES, type DateShift, parseSpreadsheet, suggestMapping, validateRows, type Mapping, type RowResult } from "./csv";
 import { assertCapacity, docIdx, firmUsers, insertClients } from "./service";
 
 const DRAFT_TTL_MS = 2 * 60 * 60 * 1000;
 const aad = (id: string) => `import_batches.payload:${id}`;
 
-type Draft = { ignored?: string[]; headers: string[]; rows: Record<string, string>[]; mapping: Mapping; delimiter: string; encoding: string };
+type Draft = { shift?: DateShift; ignored?: string[]; headers: string[]; rows: Record<string, string>[]; mapping: Mapping; delimiter: string; encoding: string };
 
 export async function createDraft(tx: Tx, p: { firmId: string; userId: string; filename: string; bytes: Buffer }) {
   if (p.bytes.length > MAX_IMPORT_BYTES) throw new Error("El archivo supera 4 MB.");
@@ -35,7 +35,7 @@ export async function loadDraft(tx: Tx, firmId: string, userId: string, batchId:
   return { ...(JSON.parse(decryptField(b.payloadEnc, aad(batchId))) as Draft), filename: b.filename };
 }
 
-export async function saveMapping(tx: Tx, firmId: string, userId: string, batchId: string, mapping: Mapping): Promise<boolean> {
+export async function saveMapping(tx: Tx, firmId: string, userId: string, batchId: string, mapping: Mapping, shift: DateShift = null): Promise<boolean> {
   const draft = await loadDraft(tx, firmId, userId, batchId);
   if (!draft) return false;
   const clean: Mapping = {};
@@ -43,7 +43,7 @@ export async function saveMapping(tx: Tx, firmId: string, userId: string, batchI
   draft.mapping = clean;
   await tx
     .update(importBatches)
-    .set({ payloadEnc: encryptField(JSON.stringify({ headers: draft.headers, rows: draft.rows, mapping: clean, delimiter: draft.delimiter, encoding: draft.encoding }), aad(batchId)) })
+    .set({ payloadEnc: encryptField(JSON.stringify({ headers: draft.headers, rows: draft.rows, mapping: clean, delimiter: draft.delimiter, encoding: draft.encoding, ignored: draft.ignored ?? [], shift }), aad(batchId)) })
     .where(eq(importBatches.id, batchId));
   return true;
 }
@@ -61,12 +61,13 @@ export type Preview = {
   hasName: boolean;
   hasDoc: boolean;
   ignored: string[];
+  shift: DateShift;
 };
 
 export async function previewImport(tx: Tx, firmId: string, userId: string, batchId: string): Promise<Preview | null> {
   const draft = await loadDraft(tx, firmId, userId, batchId);
   if (!draft) return null;
-  const results = validateRows(draft.rows, draft.mapping);
+  const results = validateRows(draft.rows, draft.mapping, draft.shift);
   const valid = results.filter((r) => r.data);
   const idxByLine = new Map(valid.filter((r) => r.data!.docNumber).map((r) => [r.line, docIdx(r.data!.docNumber!)]));
   const found = new Set<string>();
@@ -120,6 +121,7 @@ export async function previewImport(tx: Tx, firmId: string, userId: string, batc
     hasName: !!draft.mapping.name,
     hasDoc: !!draft.mapping.doc || !!draft.mapping.docTail,
     ignored: draft.ignored ?? [],
+    shift: draft.shift ?? null,
   };
 }
 

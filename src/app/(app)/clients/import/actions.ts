@@ -40,7 +40,10 @@ export async function saveMappingAction(form: FormData) {
     const v = String(form.get(`map_${f}`) ?? "");
     if (v) mapping[f] = v;
   }
-  const ok = await withTenant(s.user.firmId, (tx) => saveMapping(tx, s.user.firmId, s.user.id, batch, mapping));
+  const month = Number(form.get("shift_month"));
+  const year = Number(form.get("shift_year"));
+  const shift = month >= 1 && month <= 12 && year >= 2000 && year <= 2100 ? { month, year } : null;
+  const ok = await withTenant(s.user.firmId, (tx) => saveMapping(tx, s.user.firmId, s.user.id, batch, mapping, shift));
   redirect(ok ? `/clients/import?batch=${batch}` : "/clients/import?expired=1");
 }
 

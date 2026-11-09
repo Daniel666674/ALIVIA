@@ -23,6 +23,10 @@ const Q = z.object({
   error: z.string().max(300).optional(),
 });
 
+const MONTHS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+const thisYear = new Date().getFullYear();
+const YEARS = [thisYear, thisYear + 1];
+
 const STEPS = ["Subir archivo", "Revisar y corregir", "Confirmar"];
 
 function Steps({ at }: { at: 1 | 2 | 3 }) {
@@ -148,6 +152,19 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
               </select>
             </label>
           ))}
+          <fieldset className="sm:col-span-2 lg:col-span-3 rounded-lg border border-dashed border-slate-300 p-3">
+            <legend className="px-1 text-sm font-medium text-slate-700">Mover las fechas límite a otro mes (opcional, útil para una demo)</legend>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <select name="shift_month" defaultValue={p.shift?.month ?? ""} className={`${inputCls} w-auto`} aria-label="Mes">
+                <option value="">— No cambiar —</option>
+                {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+              </select>
+              <select name="shift_year" defaultValue={p.shift?.year ?? YEARS[1]} className={`${inputCls} w-auto`} aria-label="Año">
+                {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <span className="text-slate-500">Se conserva el día de cada fecha (12 de agosto → 12 del mes elegido).</span>
+            </div>
+          </fieldset>
           <div className="sm:col-span-2 lg:col-span-3"><button className={btnGhost}>Actualizar vista previa</button></div>
         </form>
       </Panel>

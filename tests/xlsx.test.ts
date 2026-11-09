@@ -40,3 +40,28 @@ describe("files without full ids and with credential columns", () => {
     expect(r[2]!.data?.docTail).toBe("00");
   });
 });
+
+describe("moving deadlines to another month (demo mode)", () => {
+  it("keeps the day, clamps to the month length", async () => {
+    const { shiftDate, validateRows } = await import("../src/lib/clients/csv");
+    expect(shiftDate("2026-08-12", { month: 3, year: 2027 })).toBe("2027-03-12");
+    expect(shiftDate("2026-08-31", { month: 2, year: 2027 })).toBe("2027-02-28");
+    const r = validateRows([{ N: "Ana Perez", T: "2", F: "25/08/2026" }], { name: "N", docTail: "T", deadline: "F" }, { month: 3, year: 2027 });
+    expect(r[0]!.data?.deadline).toBe("2027-03-25");
+  });
+});
+
+describe("mixed 'Tipo de entrega' column", () => {
+  it("sends names to responsible and known cities to city", async () => {
+    const { validateRows } = await import("../src/lib/clients/csv");
+    const p = await parseSpreadsheet(Buffer.from("Nombre,Ultimos dos digitos,TIPO DE ENTREGA\nAna Perez,2,MARIA \nLuis Diaz,3,CHIA\nSofia Ruiz,4,\n"));
+    const m = suggestMapping(p.headers);
+    expect(m.responsible).toBe("TIPO DE ENTREGA");
+    expect(m.city).toBe("TIPO DE ENTREGA");
+    expect(m.kind).toBeUndefined();
+    const r = validateRows(p.rows, m);
+    expect(r[0]!.data).toMatchObject({ responsible: "MARIA", city: null });
+    expect(r[1]!.data).toMatchObject({ responsible: null, city: "Chía" });
+    expect(r[2]!.data).toMatchObject({ responsible: null, city: null });
+  });
+});
