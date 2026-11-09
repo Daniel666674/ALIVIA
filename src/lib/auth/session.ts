@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { withSystem } from "@/db/client";
 import { env } from "@/env";
-import { can, resolveSession, type ResolvedSession } from "./session-core";
+import { can, resolveSession, stepFor, type ResolvedSession } from "./session-core";
 import type { PermissionKey } from "./permissions";
 
 const prod = () => env().NODE_ENV === "production";
@@ -32,12 +32,11 @@ export const getSession = cache(async (): Promise<ResolvedSession | null> => {
   return withSystem((tx) => resolveSession(tx, token));
 });
 
+export const mfaRequired = () => env().REQUIRE_MFA;
+
 /** Where an authenticated-but-incomplete session must go next, or null if fully signed in. */
 export function nextStep(s: ResolvedSession): string | null {
-  if (s.user.mustChangePassword) return "/account/password";
-  if (!s.user.totpEnabled) return "/account/mfa";
-  if (!s.mfaVerified) return "/login/verify";
-  return null;
+  return stepFor(s, mfaRequired());
 }
 
 /**

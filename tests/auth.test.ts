@@ -153,3 +153,23 @@ describe("password", () => {
     expect(row!.passwordHash).toMatch(/^\$argon2id\$/);
   });
 });
+
+import { stepFor } from "@/lib/auth/session-core";
+
+describe("login steps with and without mandatory 2FA", () => {
+  const u = (o: Partial<{ mustChangePassword: boolean; totpEnabled: boolean }>) => ({ mfaVerified: false, user: { id: "x", firmId: "f", email: "e", name: "n", roleKey: "owner", mustChangePassword: false, totpEnabled: false, ...o } });
+  it("always forces the first password change", () => {
+    expect(stepFor(u({ mustChangePassword: true }), true)).toBe("/account/password");
+    expect(stepFor(u({ mustChangePassword: true }), false)).toBe("/account/password");
+  });
+  it("requires enrollment only when 2FA is mandatory", () => {
+    expect(stepFor(u({}), true)).toBe("/account/mfa");
+    expect(stepFor(u({}), false)).toBeNull();
+  });
+  it("users who did enroll must still verify, whatever the flag", () => {
+    expect(stepFor(u({ totpEnabled: true }), false)).toBe("/login/verify");
+    expect(stepFor(u({ totpEnabled: true }), true)).toBe("/login/verify");
+    expect({ ...u({ totpEnabled: true }), mfaVerified: true }).toBeTruthy();
+    expect(stepFor({ ...u({ totpEnabled: true }), mfaVerified: true }, true)).toBeNull();
+  });
+});

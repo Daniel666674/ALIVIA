@@ -8,7 +8,7 @@ import { requestInfo } from "@/lib/auth/context";
 import { changePassword, confirmTotpEnrollment } from "@/lib/auth/login";
 import { passwordPolicyError } from "@/lib/auth/password";
 import { revokeOtherSessions, rotateSession } from "@/lib/auth/session-core";
-import { getSession, nextStep, requireUser, setSessionCookie } from "@/lib/auth/session";
+import { getSession, mfaRequired, nextStep, requireUser, setSessionCookie } from "@/lib/auth/session";
 import { clearRecoveryFlash, setRecoveryFlash } from "@/lib/auth/flash";
 import { limitOrMessage, type FormState } from "@/lib/auth/actions-shared";
 
@@ -46,7 +46,7 @@ export async function changePasswordAction(_: FormState, form: FormData): Promis
   });
   if (!rotated) return { error: "La contraseña actual es incorrecta." };
   await setSessionCookie(rotated.token, rotated.expiresAt);
-  redirect(s.user.totpEnabled ? (s.mfaVerified ? "/dashboard" : "/login/verify") : "/account/mfa");
+  redirect(s.user.totpEnabled ? (s.mfaVerified ? "/dashboard" : "/login/verify") : mfaRequired() ? "/account/mfa" : "/dashboard");
 }
 
 export async function confirmMfaAction(_: FormState, form: FormData): Promise<FormState> {

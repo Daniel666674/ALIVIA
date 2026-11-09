@@ -7,7 +7,7 @@ import { audit } from "@/lib/audit";
 import { requestInfo } from "@/lib/auth/context";
 import { attemptLogin, normalizeEmail, verifySecondFactor } from "@/lib/auth/login";
 import { createSession, revokeSession, rotateSession } from "@/lib/auth/session-core";
-import { clearSessionCookie, getSession, nextStep, setSessionCookie } from "@/lib/auth/session";
+import { clearSessionCookie, getSession, mfaRequired, nextStep, setSessionCookie } from "@/lib/auth/session";
 import { limitOrMessage, type FormState } from "@/lib/auth/actions-shared";
 import { blindIndex } from "@/lib/crypto";
 
@@ -45,7 +45,7 @@ export async function loginAction(_: FormState, form: FormData): Promise<FormSta
   if (!result) return { error: GENERIC };
 
   await setSessionCookie(result.token, result.expiresAt);
-  redirect(result.user.mustChangePassword ? "/account/password" : !result.user.totpEnabled ? "/account/mfa" : "/login/verify");
+  redirect(result.user.mustChangePassword ? "/account/password" : result.user.totpEnabled ? "/login/verify" : mfaRequired() ? "/account/mfa" : "/dashboard");
 }
 
 const Code = z.object({ code: z.string().min(6).max(24) });

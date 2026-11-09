@@ -138,3 +138,11 @@ export async function rotateSession(
 export function can(s: Pick<ResolvedSession, "permissions">, key: PermissionKey): boolean {
   return s.permissions.has(key);
 }
+
+/** Where an authenticated-but-incomplete session must go next, or null if fully signed in. */
+export function stepFor(s: Pick<ResolvedSession, "mfaVerified" | "user">, requireMfa: boolean): string | null {
+  if (s.user.mustChangePassword) return "/account/password";
+  if (!s.user.totpEnabled) return requireMfa ? "/account/mfa" : null;
+  if (!s.mfaVerified) return "/login/verify";
+  return null;
+}

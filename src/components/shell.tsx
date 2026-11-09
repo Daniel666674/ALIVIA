@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { logoutAction } from "@/app/login/actions";
 import type { ResolvedSession } from "@/lib/auth/session-core";
 import { can } from "@/lib/auth/session-core";
+import { mfaRequired } from "@/lib/auth/session";
 
 const NAV = [
   { href: "/dashboard", label: "Hoy", icon: "🏠", perm: "dashboard:read" },
@@ -46,7 +47,15 @@ export function Shell({ session, active, children }: { session: ResolvedSession;
           </div>
         </div>
       </aside>
-      <main className="min-w-0 px-4 py-6 sm:px-8">{children}</main>
+      <main className="min-w-0 px-4 py-6 sm:px-8">
+        {!mfaRequired() && !session.user.totpEnabled && (
+          <div role="status" className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+            <b>Verificación en dos pasos desactivada en este entorno.</b> Su cuenta solo está protegida por la contraseña.
+            <Link href="/account/mfa" className="font-semibold underline">Activarla</Link>
+          </div>
+        )}
+        {children}
+      </main>
     </div>
   );
 }
