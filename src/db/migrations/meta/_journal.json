@@ -29,6 +29,20 @@
       "when": 1794090096927,
       "tag": "0003_rate_limit_hits_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794244915917,
+      "tag": "0004_clients_documents_tasks",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794244916593,
+      "tag": "0005_clients_rls",
+      "breakpoints": true
     }
   ]
 }

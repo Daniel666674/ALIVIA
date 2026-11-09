@@ -4,8 +4,9 @@ Sistema operativo para firmas contables. Next.js (App Router) + TypeScript estri
 Plan completo: [`docs/PLAN.md`](docs/PLAN.md) · Seguridad: [`docs/SECURITY.md`](docs/SECURITY.md)
 
 ## Estado
-**Fase 1 (cimientos de seguridad)**: login real con Argon2id, 2FA TOTP obligatorio, sesiones en BD, rate limiting,
-permisos por rol, multi-firma con RLS, auditoría inmutable, cabeceras/CSP. Base de datos **vacía**: sin clientes de ejemplo.
+**Fase 1 funcional**: acceso seguro (Argon2id, 2FA, sesiones, RLS, auditoría) + clientes, importación de CSV con vista
+previa y deshacer, 4 documentos por cliente (subida cifrada), semáforo y tablero, tareas, panel "Hoy" y equipo/auditoría.
+Base de datos **vacía**: sin clientes de ejemplo. Puesta en marcha: [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ## Desarrollo local
 ```bash

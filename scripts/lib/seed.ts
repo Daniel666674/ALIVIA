@@ -45,13 +45,19 @@ export async function runSeed(pool: Pool, firmName: string, specs: Spec[]) {
     await tx.insert(schema.rolePermissions).values(def.permissions.map((p) => ({ roleId: role!.id, permissionId: perms.get(p)! })));
   }
 
-  console.log(`\nFirm: ${firm!.name} (${firm!.id})`);
+  console.log(`\nFirm: ${firm!.name} (${firm!.id}) · seat limit: ${firm!.seatLimit}`);
+  let seats = (await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.firmId, firm!.id))).length;
   for (const u of specs) {
     const [existing] = await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, u.email));
     if (existing) {
       console.log(`  skip   ${u.email} (already exists)`);
       continue;
     }
+    if (seats >= firm!.seatLimit) {
+      console.log(`  SKIP   ${u.email} (the plan allows ${firm!.seatLimit} users; raise firms.seat_limit to add more)`);
+      continue;
+    }
+    seats++;
     const pw = tempPassword();
     await tx.insert(schema.users).values({
       firmId: firm!.id, email: u.email, name: u.name, roleId: roleIds.get(u.role)!, passwordHash: await hashPassword(pw), mustChangePassword: true,

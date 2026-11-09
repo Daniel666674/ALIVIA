@@ -15,6 +15,7 @@ export const LIMITS = {
   passwordChange: { max: 5, windowSec: 15 * 60 },
   general: { max: 100, windowSec: 60 },
   vaultDownload: { max: 30, windowSec: 60 },
+  documentUpload: { max: 40, windowSec: 10 * 60 },
   csvImport: { max: 5, windowSec: 60 * 60 },
 } as const;
 

@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
+  customType,
+  date,
   bigint,
   bigserial,
   boolean,
@@ -23,7 +25,14 @@ const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull(
 export const firms = pgTable("firms", {
   id: id(),
   name: text("name").notNull(),
+  /** Plan limits (Phase 1): enforced by the app, editable per firm. */
+  clientLimit: integer("client_limit").notNull().default(600),
+  seatLimit: integer("seat_limit").notNull().default(4),
   createdAt: createdAt(),
+});
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "bytea",
 });
 
 // Global catalog (not tenant-scoped).
@@ -156,4 +165,114 @@ export const rateLimitHits = pgTable(
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("rate_limit_hits_lookup_idx").on(t.bucket, t.key, t.at)],
+);
+
+export const CLIENT_KINDS = ["natural", "empresa"] as const;
+export const CLIENT_STAGES = ["pending", "in_preparation", "in_review", "presented"] as const;
+export const DOC_KINDS = ["bank_cert", "rut", "dian_key", "id_doc"] as const;
+export const DOC_STATUSES = ["pending", "received", "reviewed"] as const;
+
+export const clients = pgTable(
+  "clients",
+  {
+    id: id(),
+    firmId: uuid("firm_id").notNull().references(() => firms.id),
+    kind: text("kind", { enum: CLIENT_KINDS }).notNull(),
+    name: text("name").notNull(),
+    /** AES-GCM encrypted ID number (cédula / NIT without check digit). */
+    docNumberEnc: text("doc_number_enc").notNull(),
+    /** HMAC blind index: equality search + uniqueness without decrypting. */
+    docIdx: text("doc_idx").notNull(),
+    /** Last 3 digits, shown in lists (the full number is only decrypted on the client's page). */
+    docHint: text("doc_hint").notNull(),
+    docDv: text("doc_dv"),
+    emailEnc: text("email_enc"),
+    phoneEnc: text("phone_enc"),
+    city: text("city"),
+    responsibleId: uuid("responsible_id").references(() => users.id),
+    deadline: date("deadline", { mode: "string" }),
+    stage: text("stage", { enum: CLIENT_STAGES }).notNull().default("pending"),
+    importBatchId: uuid("import_batch_id"),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("clients_firm_doc_uq").on(t.firmId, t.docIdx).where(sql`${t.deletedAt} IS NULL`),
+    index("clients_firm_stage_idx").on(t.firmId, t.stage),
+    index("clients_firm_resp_idx").on(t.firmId, t.responsibleId),
+    index("clients_batch_idx").on(t.importBatchId),
+  ],
+);
+
+export const clientDocuments = pgTable(
+  "client_documents",
+  {
+    id: id(),
+    firmId: uuid("firm_id").notNull().references(() => firms.id),
+    clientId: uuid("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: DOC_KINDS }).notNull(),
+    status: text("status", { enum: DOC_STATUSES }).notNull().default("pending"),
+    receivedAt: timestamp("received_at", { withTimezone: true }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewedBy: uuid("reviewed_by"),
+  },
+  (t) => [uniqueIndex("client_documents_uq").on(t.clientId, t.kind), index("client_documents_firm_idx").on(t.firmId)],
+);
+
+/** Encrypted file bytes (demo storage in Postgres; moves to private object storage later). */
+export const documentFiles = pgTable(
+  "document_files",
+  {
+    id: id(),
+    firmId: uuid("firm_id").notNull().references(() => firms.id),
+    clientDocumentId: uuid("client_document_id").notNull().references(() => clientDocuments.id, { onDelete: "cascade" }),
+    filename: text("filename").notNull(),
+    mime: text("mime").notNull(),
+    size: integer("size").notNull(),
+    sha256: text("sha256").notNull(),
+    dataEnc: bytea("data_enc").notNull(),
+    uploadedBy: uuid("uploaded_by"),
+    uploadedAt: createdAt(),
+  },
+  (t) => [index("document_files_doc_idx").on(t.clientDocumentId), index("document_files_firm_idx").on(t.firmId)],
+);
+
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: id(),
+    firmId: uuid("firm_id").notNull().references(() => firms.id),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    assigneeId: uuid("assignee_id").references(() => users.id),
+    dueDate: date("due_date", { mode: "string" }),
+    status: text("status", { enum: ["open", "done"] }).notNull().default("open"),
+    createdBy: uuid("created_by"),
+    createdAt: createdAt(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [index("tasks_firm_status_idx").on(t.firmId, t.status, t.dueDate), index("tasks_client_idx").on(t.clientId)],
+);
+
+export const importBatches = pgTable(
+  "import_batches",
+  {
+    id: id(),
+    firmId: uuid("firm_id").notNull().references(() => firms.id),
+    userId: uuid("user_id").notNull(),
+    filename: text("filename").notNull(),
+    status: text("status", { enum: ["draft", "applied", "rolled_back"] }).notNull().default("draft"),
+    totalRows: integer("total_rows").notNull().default(0),
+    created: integer("created").notNull().default(0),
+    skipped: integer("skipped").notNull().default(0),
+    failed: integer("failed").notNull().default(0),
+    /** Encrypted JSON of parsed rows while a draft; wiped as soon as the import is applied or expires. */
+    payloadEnc: text("payload_enc"),
+    createdAt: createdAt(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    appliedAt: timestamp("applied_at", { withTimezone: true }),
+    rolledBackAt: timestamp("rolled_back_at", { withTimezone: true }),
+  },
+  (t) => [index("import_batches_firm_idx").on(t.firmId, t.createdAt)],
 );

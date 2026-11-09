@@ -6,7 +6,11 @@ import type { RequestInfo } from "@/lib/auth/context";
 export type AuditAction =
   | "auth.login.success" | "auth.login.failure" | "auth.login.locked" | "auth.logout"
   | "auth.mfa.success" | "auth.mfa.failure" | "auth.mfa.enrolled" | "auth.recovery.used"
-  | "auth.password.changed" | "auth.session.revoked" | "auth.rate_limited";
+  | "auth.password.changed" | "auth.session.revoked" | "auth.rate_limited"
+  | "client.created" | "client.updated" | "client.stage" | "client.deleted"
+  | "import.applied" | "import.rolled_back"
+  | "document.uploaded" | "document.downloaded" | "document.status" | "document.deleted"
+  | "task.created" | "task.done" | "task.deleted";
 
 export async function audit(
   tx: Tx,

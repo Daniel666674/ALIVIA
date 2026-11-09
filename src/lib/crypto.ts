@@ -61,3 +61,27 @@ export function safeEqual(a: string, b: string): boolean {
   const bb = Buffer.from(b);
   return ab.length === bb.length && timingSafeEqual(ab, bb);
 }
+
+/** Binary variant for file contents: [keyVersion:1][iv:12][tag:16][ciphertext]. */
+export function encryptBytes(plain: Buffer, aad: string): Buffer {
+  const version = env().FIELD_KEY_CURRENT;
+  if (version > 255) throw new Error("Key version out of range");
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", fieldKey(version), iv);
+  cipher.setAAD(Buffer.from(aad));
+  const ct = Buffer.concat([cipher.update(plain), cipher.final()]);
+  return Buffer.concat([Buffer.from([version]), iv, cipher.getAuthTag(), ct]);
+}
+
+export function decryptBytes(blob: Buffer, aad: string): Buffer {
+  if (blob.length < 29) throw new Error("Malformed ciphertext");
+  const version = blob[0]!;
+  const decipher = createDecipheriv("aes-256-gcm", fieldKey(version), blob.subarray(1, 13));
+  decipher.setAAD(Buffer.from(aad));
+  decipher.setAuthTag(blob.subarray(13, 29));
+  return Buffer.concat([decipher.update(blob.subarray(29)), decipher.final()]);
+}
+
+export function sha256Hex(data: Buffer): string {
+  return createHash("sha256").update(data).digest("hex");
+}
